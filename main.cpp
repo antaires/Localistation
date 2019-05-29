@@ -20,7 +20,7 @@
 #include <cmath>
 #include <map> // for storing unique BRDs and counting how often they occur
 
-// adding to new github
+// adding to new github - confirming works: branch: noRotation
 //#define CONNSLEN 3 // length of connections array for Waypoint object
 #define BRD_LEN 5
 #define TOTAL_WAYPOINTS 142 // total number of waypoints entered in text file
