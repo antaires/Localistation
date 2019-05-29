@@ -405,6 +405,22 @@ public:
         
         // calculate heading for each new waypoint, and add w.bsd here in correct rotation
         heading = calculateHeading(prevPos, w.pos); // (prevPos, nextPos)
+        
+        // TO DO ROTATION LOCK - CHANGE THIS
+        float areaMax = w.rot + 45;
+        float areaMin = w.rot - 45;
+        
+        while(heading > 360){
+            heading -= 360;
+        }
+        while (heading < 0){
+            heading += 360;
+        }
+        
+        if (heading < areaMin || heading > areaMax){
+            std::cout<<"heading: "<<heading<<" waypoint rotation: "<<w.rot<<std::endl;
+            return;
+        }
         // can select only the headings I want here, return if heading not what I want...
         path = path + rotateWaypoint(w, heading); // apply rotation
         
