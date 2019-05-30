@@ -7,6 +7,7 @@
 //
 //  A program to take in a text file of waypoint data, determine all possible paths of
 //  desired length, and render a histogram of distributions for unique paths
+//  Handles both directed and undirected (for undirected, it will rotate BSD as needed)
 
 #include <iostream>
 #include <sstream> // for splitting the text string and storing to array
@@ -21,18 +22,14 @@
 #include <map> // for storing unique BRDs and counting how often they occur
 
 // adding to new github
-//#define CONNSLEN 3 // length of connections array for Waypoint object
-#define BRD_LEN 5
+#define BRD_LEN 20
 #define TOTAL_WAYPOINTS 142 // total number of waypoints entered in text file
 #define MAXLINELEN 100 // maximum length of waypoint data for total waypoints < 1000 (000 00 heading x y 000 000 000....?)
-//#define WPINFOLEN 5 // number of 'words' in the waypoint data: 000 00 000 000 000
-//#define WPWORDLEN 3 // size of 'word' -- largest is 3 digits for total wp < 1000
 #define BSDLEN 2 // number of bits in a BSD
-#define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/data_distance4_142.txt"
+#define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/data_distance4_142_directed.txt"
 #define OUTPUT "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/histogram_output/output.txt"
 // don't change
 #define ARRLEN TOTAL_WAYPOINTS + 1 // length of waypoint arr (total num of waypoints + 1) - each waypoint stored as its id
-
 
 // FOR TESTING
 // // id BSD(left,right) rotation posX posY connection_ids (variable length)
@@ -118,39 +115,26 @@ public:
     void addBit(int bit){
         // if bit 0, go left
         if (bit == 0){
-            // create node if it doesn't exist
             if (current->left == NULL){
                 current->left = createNode(bit);
             }
-            //createNodeIfNotExist(bit, current->left);
             current = current->left;
         } else {
-            // create node if it doesn't exist
             if (current->right == NULL){
                 current->right = createNode(bit);
             }
-            //createNodeIfNotExist(bit, current->right); // pointer not pointing
             current = current->right;
         }
     }
     
-    //void createNodeIfNotExist(int bit, Node** p){
-    //    if (*p == NULL) {
-    //        *p = createNode(bit);
-    //        std::cout << "creating node with bit: " << bit << "p: "<<&p<<std::endl;
-    //    }
-    //}
-    
     Node* createNode(int bit){
-        //Node* n = (Node*) malloc(sizeof(Node));
         Node* n = new Node();
         n->setBit(bit);
         return n;
     }
     
-    // increases visit count of 'current' node
     void increaseCurrentCount(){
-        current->count++; // getting bad thread count here
+        current->count++;
     }
     
     // go through each path of tree, build BRD and print count
@@ -231,7 +215,7 @@ public:
     // data members
     int id;
     std::string bsd;
-    std::vector<int> conns; // unknown number of connections
+    std::vector<int> conns;
     Vector2d pos;
     double rot; // this value comes from Unity in degrees, 0 - 360
     bool visited;
@@ -263,11 +247,10 @@ public:
 class WaypointArray {
 public:
     // waypoints are stored in the array based on their id
-    //std::vector<Waypoint> waypointArray;
     Waypoint waypointArray[ARRLEN];
     WaypointArray(){}
     void print(){
-        // loop over waypoints and print (skips first unused)
+        // loop over waypoints and print (skips first = unused)
         for (int i = 1; i < ARRLEN; i++){
             waypointArray[i].print();
         }
@@ -276,7 +259,7 @@ public:
         for (int i = 0; i < ARRLEN; i++){
             waypointArray[i].visited = false;
         }
-        // set first to visited as it is unused
+        // set first to visited as it is NEVER used
         waypointArray[0].visited = true;
     }
 };
@@ -337,11 +320,7 @@ public:
             // STORE NEW WAYPOINT IN ARRAY, INDEXED BY WAYPOINT ID
             wa->waypointArray[w.id] = w;
             
-            // do I actually need to keep the string? TODO
-            // *p_data = *p_data + line + "\n"; // process line
-            
             getline(ifs, line);  // get next line if exists
-            //std::cout << "Processing: " + data << std::endl;
         }
         
         ifs.close(); // close the file
@@ -370,11 +349,7 @@ public:
     int len;
     int marker = 0;
     WaypointArray wa;
-    std::vector<std::string> pathsVector; //  unknown how many paths will be needed
-    // int p; // tracking pathsArray location
-    
     BTree btree = BTree();
-    
     //std::stack<Waypoint> stack; // stack for DFS TODO -- not needed if doing recursively
     
     Paths (int l, WaypointArray *warr){ // construct with desired length and waypoint array
@@ -384,17 +359,12 @@ public:
     
     void generatePaths(){ // input path length for BRDs
         // loop over graph: start with 1 because waypoint0 is not used
-        
-        // TODO make path a Bit sequence?
-        std::string path = "";
+        std::string path = ""; // TODO make path a Bit sequence?
         for (int i = 1; i < ARRLEN; i++){
             wa.waypointArray[i].visited = true;
-            // TODO does it work that starting with its OWN position?
             buildPath(path, wa.waypointArray[i], wa.waypointArray[i].pos); // build all paths starting at each waypoint in turn
             wa.unvisitAll(); // clear "visited" bool to start next path
         }
-        
-        // TESTING
         btree.print();
     }
     
@@ -405,8 +375,7 @@ public:
         
         // calculate heading for each new waypoint, and add w.bsd here in correct rotation
         heading = calculateHeading(prevPos, w.pos); // (prevPos, nextPos)
-        // can select only the headings I want here, return if heading not what I want...
-        path = path + rotateWaypoint(w, heading); // apply rotation
+        path = path + rotateWaypoint(w, heading); // apply rotation -> not needed for directed graph
         
         // check for connections if path length not reached yet
         if (path.length() < len * BSDLEN){
@@ -420,16 +389,8 @@ public:
             }
         }
         
-        // path has reached limit add to array if long enough
+        // path has reached limit add to tree if long enough
         if (path.length() == len * BSDLEN){
-            // TODO - tree idea: here is where I have the full path, this is where it should be
-            // added to the tree, rather than pathsVector...
-            // the toll on  mem will still be high because its recursive - can I do this iteratively with a stack?
-            // alternately, this would be where count is increased in tree, and add bits as I generate them (after rotation
-            // is calculated - so would be adding bits as 2-bit sequences to tree)
-            
-            // Testing without storage, shows that process can succeed, it will just take time
-            //pathsVector.push_back(path);
             btree.addBrd(path);
         }
     }
@@ -466,184 +427,7 @@ public:
         newBsd = newBsd + bsd[0];
         return newBsd;
     }
-    
-    std::vector<std::string> getPaths(){
-        return pathsVector;
-    }
-    
-    void print() {
-        for(int i = 0; i < pathsVector.size(); i++){
-            std::cout << pathsVector[i] << std::endl;
-        }
-    }
 };
-
-/*
- // ---------------------- //
- // ------ Datapoint ----- //
- // ---------------------- //
- // a class to contain a unique BRD and the count of how often it appears
- class Datapoint {
- public:
- long int count;
- std::string brd;
- Datapoint(std::string str){
- brd = str;
- count = 0;
- }
- void incrementCount(){
- count++;
- }
- void setCount(long int i){
- count = i;
- }
- long int getCount(){
- return count;
- }
- };*/
-
-// ---------------------- //
-// ------ Dataset ------- //
-// ---------------------- //
-// used to build a vector of unique Datapoints from all paths
-class Dataset {
-public:
-    std::map<std::string, int> pathMap;
-    //std::vector<Datapoint> dataset;
-    std::vector<std::string> allPathsVector;
-    Dataset(std::vector<std::string> apv, std::map<std::string, int> *map){
-        allPathsVector = apv;
-        pathMap = *map;
-        
-    }
-    
-    void buildSet() {
-        // loop over all path BRDs in allPathsVector
-        for (int i = 0; i < allPathsVector.size(); i++){
-            // create an iterator for the map
-            std::map<std::string, int>::iterator it = pathMap.find(allPathsVector[i]);
-            // check if BRD exists in map
-            if ( it != pathMap.end() ){
-                // BRD is already in map -- access value from iterator and increment it
-                it->second++;
-            } else {
-                // add BRD to map
-                pathMap.insert(std::make_pair(allPathsVector[i], 1)); // starting with frequency = 1
-            }
-        }
-    }
-    
-    /* OLD METHODS using vector
-     void buildSet() { // TODO is this efficient? How can I optimize this process?
-     // loop over all BRDs
-     for(int i = 0; i < allPathsVector.size(); i++){
-     // if BRD not already in set...
-     if ( newBrd(allPathsVector[i]) ){
-     // get frequency of each BRD
-     long int freq = std::count(allPathsVector.begin(), allPathsVector.end(), allPathsVector[i]);
-     // create datapoint
-     Datapoint dp(allPathsVector[i]);
-     dp.setCount(freq);
-     // Add to dataSet
-     dataset.push_back(dp);
-     }
-     }
-     }
-     // returns true if BRD not already in set
-     bool newBrd(std::string brd){
-     // loop over datapoints in dataset
-     for (int i = 0; i < dataset.size(); i++){
-     if (!dataset[i].brd.compare(brd)){
-     return false;
-     }
-     }
-     // returns true if no elements in dataset
-     return true;
-     }
-     std::vector<Datapoint> getDataSet(){
-     return dataset;
-     }
-     void print(){
-     std::cout << "DATASET: " << std::endl;
-     for(int i = 0; i < dataset.size(); i++){
-     std::cout << "   BRD: " << dataset[i].brd << " Freq: " << dataset[i].getCount() << std::endl;
-     }
-     } // END OF OLD METHODS*/
-    
-    void print(int brdLen) {
-        
-        // main title and information
-        std::cout << "\nHISTOGRAM GENERATOR" << std::endl;
-        std::cout << "\nBRD length: " << brdLen << "\n" << std::endl;
-        
-        // create a map iterator and point to start of map
-        std::map<std::string, int>::iterator it = pathMap.begin();
-        // iterate over map using Iterator
-        while (it != pathMap.end()){
-            // access key (BRD)
-            std::string brd = it->first;
-            // access value (frequency)
-            int freq = it->second;
-            // print BRD (freq) -- setW(3) is for formatting number of connections
-            std::cout << brd << " (" << std::setw(4) << freq << ") |";
-            // loop over freq and add X
-            for (int j = 0; j < freq; j++){
-                std::cout << "\u25A0";
-            }
-            std::cout << std::endl;
-            // increment iterator
-            it++;
-        }
-    }
-};
-
-/*
- // ---------------------- //
- // ---- SIMPLE RENDER --- //
- // ---------------------- //
- // draws histogram to console
- class SimpleRender {
- public:
- std::map<std::string, int> pathMap;
- //std::vector<Datapoint> dataset;
- int brdLen;
- SimpleRender (std::map<std::string, int> *map, int blen){
- pathMap = *map;
- brdLen = blen;
- }
- 
- void render() {
- // main title and information
- std::cout << "\nHISTOGRAM GENERATOR" << std::endl;
- std::cout << "\nBRD length: " << brdLen << "\n" << std::endl;
- 
- // create a map iterator and point to start of map
- std::map<std::string, int>::iterator it = pathMap.begin();
- 
- // iterate over map using Iterator
- while (it != pathMap.end()){
- // access key (BRD)
- std::string brd = it->first;
- // access value (frequency)
- int freq = it->second;
- 
- // print BRD (freq) -- setW(3) is for formatting number of connections
- std::cout << brd << " (" << std::setw(4) << freq << ") |";
- // loop over freq and add X
- for (int j = 0; j < freq; j++){
- std::cout << "\u25A0";
- }
- std::cout << std::endl;
- 
- // increment iterator
- it++;
- }
- 
- }
- 
- 
- // TODO add more information about distribution etc
- };*/
 
 // ---------------------- //
 // ------- MAIN --------- //
@@ -655,6 +439,14 @@ int main(int argc, const char * argv[]) {
      char * dir = getcwd(NULL, 0);
      std::cout << dir << std::endl;
      */
+    // print info for file
+    std::cout<<"Number of waypoints: "<<BRD_LEN<<std::endl;
+    std::cout<<"Number of bits in BRD: "<<BRD_LEN * BSDLEN <<std::endl;
+    std::cout<<"Total number of waypoints: "<<TOTAL_WAYPOINTS<<std::endl;
+    std::cout<<"data file: "<<DATAFILE<<std::endl<<std::endl;;
+    
+    // stats array - track how many paths occur 1 - 100 times (lump all others together under 101)
+    // int statsArray[101];
     
     // pick path length
     int pathlength = BRD_LEN; // number of waypoints per path
@@ -666,9 +458,6 @@ int main(int argc, const char * argv[]) {
     // generate string from file, builds waypoints from lines, stores them to waypoint array
     DataProcessing dp = DataProcessing(fileName);
     dp.process(&data, &wa);
-    // TESTING DATA has been put into string
-    //std::cout << data << std::endl;
-    //wa.print();
     std::cout << "data processed to waypoint array" << std::endl;
     
     // generate paths
@@ -676,19 +465,6 @@ int main(int argc, const char * argv[]) {
     p.generatePaths();
     //p.print();
     std::cout << "paths generated" << std::endl;
-    
-    // place paths onto a searchable tree structure OR hash table, and count how often it appears
-    // make all paths into a set of BRDs, with a frequency count for each BRD
-    Dataset ds = Dataset(p.getPaths(), &pathMap);
-    ds.buildSet();
-    ds.print(pathlength);
-    
-    /*
-     // visualise unique paths + counts as histogram
-     // take in a dataset, and render it!
-     SimpleRender sr = SimpleRender(&pathMap, pathlength);
-     sr.render();
-     */
     
     return 0;
 }
