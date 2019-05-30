@@ -22,13 +22,14 @@
 #include <map> // for storing unique BRDs and counting how often they occur
 
 // adding to new github
-#define BRD_LEN 20
+#define BRD_LEN 15
 #define TOTAL_WAYPOINTS 142 // total number of waypoints entered in text file
 #define MAXLINELEN 100 // maximum length of waypoint data for total waypoints < 1000 (000 00 heading x y 000 000 000....?)
 #define BSDLEN 2 // number of bits in a BSD
 #define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/data_distance4_142_directed.txt"
 #define OUTPUT "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/histogram_output/output.txt"
 // don't change
+#define STATS_ARR_LEN 102
 #define ARRLEN TOTAL_WAYPOINTS + 1 // length of waypoint arr (total num of waypoints + 1) - each waypoint stored as its id
 
 // FOR TESTING
@@ -68,6 +69,8 @@ class BTree {
 public:
     Node root;
     Node* current;
+    int statsArray[STATS_ARR_LEN]; // stats array - track how many paths occur 1 - 100 times (lump all others together under 101)
+
     
     /*
      // the M is the capacity (8 = 8 bits)
@@ -89,6 +92,13 @@ public:
     BTree(){
         root = Node();      // root is first node
         current = &root;    // current is pointer
+        initStatsArray();
+    }
+    
+    void initStatsArray(){
+        for(int i = 0; i<STATS_ARR_LEN; i++){
+            statsArray[i] = 0;
+        }
     }
     
     // used to add a full path to tree (tree built as paths added)
@@ -142,6 +152,7 @@ public:
         std::cout<<"PRINTING TREE: " << std::endl;
         std::string p = "";
         printTree(&root, p, BRD_LEN*BSDLEN);
+        printStats();
     }
     
     void printTree(Node* n, std::string p, int cnt){
@@ -172,6 +183,12 @@ public:
                 std::cout<<"\u25A0";
             }
             std::cout<<std::endl;
+            // update stats info
+            if (n->count <= 100){
+                statsArray[n->count] = statsArray[n->count] + 1;
+            } else {
+                statsArray[STATS_ARR_LEN-1] = statsArray[STATS_ARR_LEN-1] + 1;
+            }
             
         } else {
             if (n->left != NULL) {
@@ -188,6 +205,25 @@ public:
          file.close();
          */
         
+    }
+    
+    void printStats(){
+        std::cout<<"\n"<<"STATS: "<<std::endl;
+        for (int i = 0; i < STATS_ARR_LEN; i++){
+            if (statsArray[i] != 0){
+                std::cout<<"Count "<<std::setw(3)<<i<<" Occurred: "<<statsArray[i]<<std::endl;
+            }
+        }
+        std::cout<<"Total paths: "<<sumStatsArray()<<std::endl;
+        std::cout<<"Unique paths: "<<statsArray[1]<<std::endl;
+    }
+    
+    int sumStatsArray(){
+        int sum = 0;
+        for(int i = 0; i < STATS_ARR_LEN; i++){
+            sum += statsArray[i];
+        }
+        return sum;
     }
     
     // TODO
@@ -352,7 +388,7 @@ public:
     BTree btree = BTree();
     //std::stack<Waypoint> stack; // stack for DFS TODO -- not needed if doing recursively
     
-    Paths (int l, WaypointArray *warr){ // construct with desired length and waypoint array
+    Paths (int l, WaypointArray *warr){ // construct with desired length, waypoint array, and stats array
         len = l;
         wa = *warr;
     }
@@ -444,9 +480,6 @@ int main(int argc, const char * argv[]) {
     std::cout<<"Number of bits in BRD: "<<BRD_LEN * BSDLEN <<std::endl;
     std::cout<<"Total number of waypoints: "<<TOTAL_WAYPOINTS<<std::endl;
     std::cout<<"data file: "<<DATAFILE<<std::endl<<std::endl;;
-    
-    // stats array - track how many paths occur 1 - 100 times (lump all others together under 101)
-    // int statsArray[101];
     
     // pick path length
     int pathlength = BRD_LEN; // number of waypoints per path
