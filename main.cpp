@@ -22,11 +22,12 @@
 #include <map> // for storing unique BRDs and counting how often they occur
 
 // adding to new github
-#define BRD_LEN 15
-#define TOTAL_WAYPOINTS 142 // total number of waypoints entered in text file
+#define DIRECTED true
+#define BRD_LEN 10
+#define TOTAL_WAYPOINTS 138 // total number of waypoints entered in text file
 #define MAXLINELEN 100 // maximum length of waypoint data for total waypoints < 1000 (000 00 heading x y 000 000 000....?)
-#define BSDLEN 2 // number of bits in a BSD
-#define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/data_distance4_142_directed.txt"
+#define BSDLEN 6 // number of bits in a BSD
+#define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/data/doors_windows_walls_FBLR/data_distance4_138_FBLR.txt"
 #define OUTPUT "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/histogram_output/output.txt"
 // don't change
 #define STATS_ARR_LEN 102
@@ -411,7 +412,12 @@ public:
         
         // calculate heading for each new waypoint, and add w.bsd here in correct rotation
         heading = calculateHeading(prevPos, w.pos); // (prevPos, nextPos)
-        path = path + rotateWaypoint(w, heading); // apply rotation -> not needed for directed graph
+        
+        if (DIRECTED){
+            path = path + w.bsd;
+        } else { // apply rotation
+            path = path + rotateWaypoint(w, heading); // apply rotation -> not needed for directed graph
+        }
         
         // check for connections if path length not reached yet
         if (path.length() < len * BSDLEN){
