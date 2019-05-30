@@ -22,13 +22,13 @@
 
 // adding to new github - confirming works: branch: noRotation
 //#define CONNSLEN 3 // length of connections array for Waypoint object
-#define BRD_LEN 5
-#define TOTAL_WAYPOINTS 142 // total number of waypoints entered in text file
+#define BRD_LEN 2
+#define TOTAL_WAYPOINTS 6 // total number of waypoints entered in text file
 #define MAXLINELEN 100 // maximum length of waypoint data for total waypoints < 1000 (000 00 heading x y 000 000 000....?)
 //#define WPINFOLEN 5 // number of 'words' in the waypoint data: 000 00 000 000 000
 //#define WPWORDLEN 3 // size of 'word' -- largest is 3 digits for total wp < 1000
 #define BSDLEN 2 // number of bits in a BSD
-#define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/data_distance4_142.txt"
+#define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/testData2.txt"
 #define OUTPUT "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/histogram_output/output.txt"
 // don't change
 #define ARRLEN TOTAL_WAYPOINTS + 1 // length of waypoint arr (total num of waypoints + 1) - each waypoint stored as its id
@@ -370,7 +370,7 @@ public:
     int len;
     int marker = 0;
     WaypointArray wa;
-    std::vector<std::string> pathsVector; //  unknown how many paths will be needed
+    // std::vector<std::string> pathsVector; //  unknown how many paths will be needed
     // int p; // tracking pathsArray location
     
     BTree btree = BTree();
@@ -384,21 +384,21 @@ public:
     
     void generatePaths(){ // input path length for BRDs
         // loop over graph: start with 1 because waypoint0 is not used
-        
-        // TODO make path a Bit sequence?
-        std::string path = "";
+        std::string path = "";  // TODO make path a Bit sequence
         for (int i = 1; i < ARRLEN; i++){
             wa.waypointArray[i].visited = true;
-            // TODO does it work that starting with its OWN position?
-            buildPath(path, wa.waypointArray[i], wa.waypointArray[i].pos); // build all paths starting at each waypoint in turn
+            if (wa.waypointArray[i].conns.size() >= 1){ // only build paths for waypoints that have at least 1 connection
+                buildPath(path, wa.waypointArray[i].pos, wa.waypointArray[wa.waypointArray[i].conns[0]]); // build all paths starting at each waypoint in turn
+            }
             wa.unvisitAll(); // clear "visited" bool to start next path
         }
-        
-        // TESTING
         btree.print();
     }
-    
-    void buildPath(std::string path, Waypoint w, Vector2d prevPos){
+                                        // prev      next (w2 == w)
+    void buildPath(std::string path, Vector2d prevPos, Waypoint w){
+        std::cout<<"waypoint: "<<w.id<<" rot: "<<w.rot<<" to ("<<prevPos.x<<","<<prevPos.y<<")"<<std::endl;
+        
+        
         w.visited = true;
         // access w.pos for current position
         float heading = 0; // TODO UNITY: set lines to have 0 rotation
@@ -407,22 +407,22 @@ public:
         heading = calculateHeading(prevPos, w.pos); // (prevPos, nextPos)
         
         // TO DO ROTATION LOCK - CHANGE THIS
-        float areaMax = w.rot + 45;
-        float areaMin = w.rot - 45;
-        
+        float areaMax = w.rot + 95; // allows for right turns
+        float areaMin = w.rot - 95;
+        //std::cout<<"heading: "<<heading;
         while(heading > 360){
             heading -= 360;
         }
         while (heading < 0){
             heading += 360;
         }
-        
+        //std::cout<<" heading after: "<<heading<<std::endl;
         if (heading < areaMin || heading > areaMax){
-            std::cout<<"heading: "<<heading<<" waypoint rotation: "<<w.rot<<std::endl;
-            return;
+            //std::cout<<"heading: "<<heading<<" waypoint rotation: "<<w.rot<<std::endl;
+            //return;
         }
-        // can select only the headings I want here, return if heading not what I want...
-        path = path + rotateWaypoint(w, heading); // apply rotation
+        //path = path + rotateWaypoint(w, heading); // apply rotation
+        path = path + w.bsd;
         
         // check for connections if path length not reached yet
         if (path.length() < len * BSDLEN){
@@ -431,7 +431,7 @@ public:
                 // if connection has not been visited yet, visit it
                 if (!(wa.waypointArray[w.conns[i]].visited)){
                     // need to pass in previous position to calculate heading
-                    buildPath(path, wa.waypointArray[w.conns[i]], w.pos); // recursive call to continue building path
+                    buildPath(path, w.pos, wa.waypointArray[w.conns[i]]); // recursive call to continue building path
                 }
             }
         }
@@ -459,6 +459,11 @@ public:
         float theta_radians = atan2(y2 - y1, x2 - x1);
         // convert to degrees
         float theta_degrees = (theta_radians * M_PI) * 360.0 / (2.0 * M_PI);
+        
+        // TODO constrain to within 360...
+        
+        std::cout<<"HEADING: from ("<<prevPos.x<<","<<prevPos.y<<") to ("<<nextPos.x<<","<<nextPos.y<<") at "<<theta_degrees<<std::endl;
+        
         return theta_degrees;
     }
     
@@ -483,15 +488,16 @@ public:
         return newBsd;
     }
     
-    std::vector<std::string> getPaths(){
-        return pathsVector;
-    }
+    // FOR USE WITH VECTOR
+    //std::vector<std::string> getPaths(){
+    //    return pathsVector;
+    //}
     
-    void print() {
-        for(int i = 0; i < pathsVector.size(); i++){
-            std::cout << pathsVector[i] << std::endl;
-        }
-    }
+    //void print() {
+    //    for(int i = 0; i < pathsVector.size(); i++){
+    //        std::cout << pathsVector[i] << std::endl;
+    //   }
+    //}
 };
 
 /*
@@ -693,11 +699,13 @@ int main(int argc, const char * argv[]) {
     //p.print();
     std::cout << "paths generated" << std::endl;
     
+    /* NOT NEEDED WITH TREE
     // place paths onto a searchable tree structure OR hash table, and count how often it appears
     // make all paths into a set of BRDs, with a frequency count for each BRD
     Dataset ds = Dataset(p.getPaths(), &pathMap);
     ds.buildSet();
     ds.print(pathlength);
+    */
     
     /*
      // visualise unique paths + counts as histogram
