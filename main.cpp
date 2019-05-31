@@ -23,11 +23,13 @@
 
 // adding to new github
 #define DIRECTED true
-#define BRD_LEN 10
-#define TOTAL_WAYPOINTS 138 // total number of waypoints entered in text file
+#define BRD_LEN 6
+#define TOTAL_WAYPOINTS 6 // total number of waypoints entered in text file
 #define MAXLINELEN 100 // maximum length of waypoint data for total waypoints < 1000 (000 00 heading x y 000 000 000....?)
-#define BSDLEN 6 // number of bits in a BSD
-#define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/data/doors_windows_walls_FBLR/data_distance4_138_FBLR.txt"
+#define BSDLEN 2 // number of bits in a BSD
+//#define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/data/doors_windows_walls_FBLR/data_distance4_138_FBLR.txt"
+//test datafile
+#define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/testData3.txt"
 #define OUTPUT "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/histogram_output/output.txt"
 // don't change
 #define STATS_ARR_LEN 102
@@ -426,6 +428,7 @@ public:
                 // if connection has not been visited yet, visit it
                 if (!(wa.waypointArray[w.conns[i]].visited)){
                     // need to pass in previous position to calculate heading
+                    wa.waypointArray[w.conns[i]].visited = true; // prevent loops
                     buildPath(path, wa.waypointArray[w.conns[i]], w.pos); // recursive call to continue building path
                 }
             }
