@@ -22,11 +22,14 @@
 #include <map> // for storing unique BRDs and counting how often they occur
 
 // adding to new github
-#define BRD_LEN 15
-#define TOTAL_WAYPOINTS 142 // total number of waypoints entered in text file
+#define DIRECTED false
+#define BRD_LEN 80
+#define TOTAL_WAYPOINTS 284 // total number of waypoints entered in text file
 #define MAXLINELEN 100 // maximum length of waypoint data for total waypoints < 1000 (000 00 heading x y 000 000 000....?)
-#define BSDLEN 2 // number of bits in a BSD
-#define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/data_distance4_142_directed.txt"
+#define BSDLEN 6 // number of bits in a BSD
+#define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/data/undirected/doors_windows_walls_FBLR/data_distance2_284_FBLR.txt"
+//test datafile
+//#define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/testData3.txt"
 #define OUTPUT "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/histogram_output/output.txt"
 // don't change
 #define STATS_ARR_LEN 102
@@ -411,7 +414,12 @@ public:
         
         // calculate heading for each new waypoint, and add w.bsd here in correct rotation
         heading = calculateHeading(prevPos, w.pos); // (prevPos, nextPos)
-        path = path + rotateWaypoint(w, heading); // apply rotation -> not needed for directed graph
+        
+        if (DIRECTED){
+            path = path + w.bsd;
+        } else { // apply rotation
+            path = path + rotateWaypoint(w, heading); // apply rotation -> not needed for directed graph
+        }
         
         // check for connections if path length not reached yet
         if (path.length() < len * BSDLEN){
@@ -420,6 +428,7 @@ public:
                 // if connection has not been visited yet, visit it
                 if (!(wa.waypointArray[w.conns[i]].visited)){
                     // need to pass in previous position to calculate heading
+                    wa.waypointArray[w.conns[i]].visited = true; // prevent loops
                     buildPath(path, wa.waypointArray[w.conns[i]], w.pos); // recursive call to continue building path
                 }
             }
@@ -457,11 +466,24 @@ public:
     }
     
     std::string switchBsd(std::string bsd){
-        // If more semantic features are added to BDS, this will need to be updated
-        std::string newBsd = "";
-        newBsd = bsd[1];
-        newBsd = newBsd + bsd[0];
-        return newBsd;
+        if (BSDLEN == 2){
+            std::string newBsd = "";
+            newBsd = bsd[1];
+            newBsd = newBsd + bsd[0];
+            return newBsd;
+        } else if (BSDLEN == 6){ //TODO do this with bits, then convert to string it would be faster
+            // assumes FB - L(d/w) - R(d/w)
+            std::string newBsd = "";
+            newBsd = bsd[1];
+            newBsd = newBsd + bsd[0];
+            newBsd = newBsd + bsd[4];
+            newBsd = newBsd + bsd[5];
+            newBsd = newBsd + bsd[2];
+            newBsd = newBsd + bsd[3];
+            return newBsd;
+        }
+        std::cout<<"POTENTIAL ERROR: CHECK switchBsd() for correct BSD length"<<std::endl;
+        return bsd;
     }
 };
 
