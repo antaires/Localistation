@@ -24,10 +24,10 @@
 // adding to new github
 #define DIRECTED false
 #define BRD_LEN 80
-#define TOTAL_WAYPOINTS 284 // total number of waypoints entered in text file
+#define TOTAL_WAYPOINTS 138 // total number of waypoints entered in text file
 #define MAXLINELEN 100 // maximum length of waypoint data for total waypoints < 1000 (000 00 heading x y 000 000 000....?)
 #define BSDLEN 6 // number of bits in a BSD
-#define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/data/undirected/doors_windows_walls_FBLR/data_distance2_284_FBLR.txt"
+#define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/data/directed/doors_windows_walls_FBLR/data_distance4_138_FBLR.txt"
 //test datafile
 //#define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/testData3.txt"
 #define OUTPUT "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/histogram_output/output.txt"
