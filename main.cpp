@@ -22,14 +22,14 @@
 #include <map> // for storing unique BRDs and counting how often they occur
 
 // adding to new github
-#define DIRECTED false
+#define DIRECTED true
 #define BRD_LEN 2 // number of waypoints in BRD
-#define TOTAL_WAYPOINTS 284 // total number of waypoints entered in text file
+#define TOTAL_WAYPOINTS 6 // total number of waypoints entered in text file
 #define MAXLINELEN 100 // maximum length of waypoint data for total waypoints < 1000 (000 00 heading x y 000 000 000....?)
-#define BSDLEN 4 // number of bits in a BSD
-#define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/data/undirected/doors_walls_FBLR/distance2/data_distance2_284_FBLR.txt"
+#define BSDLEN 2 // number of bits in a BSD
+// #define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/data/undirected/doors_walls_FBLR/distance2/data_distance2_284_FBLR.txt"
 //test datafile
-//#define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/testData3.txt"
+#define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/testData3.txt"
 #define OUTPUT "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/histogram_output/output.txt"
 // don't change
 #define STATS_ARR_LEN 102
@@ -71,6 +71,14 @@ public:
     
     std::vector<int> getWaypointIds(){
         return waypointIds;
+    }
+    
+    void printNode(){
+        // print all contents of node to a single line, no new line after
+        std::cout<<"||NODE bit:"<<bit<<" cnt:"<<count<<" ids:";
+        for(int i = 0; i < waypointIds.size(); i++){
+            std::cout<<waypointIds.at(i)<<" ";
+        }
     }
 };
 
@@ -121,33 +129,21 @@ public:
         
         //resetToRoot();
         current = &root;
-    
-        //std::cout<<"path: " << str_brd<<" ids: ";
-        //for (int i = 0; i < waypointIds.size(); i++){
-        //    std::cout<<waypointIds.at(i)<<" ";
-        //}
-        //std::cout<<std::endl;
         
         // for each bit:
-        int count = 1;
-        int idIndex = 0;
-        for (int i = (BRD_LEN*BSDLEN)-1; i >= 0; i--){
-            std::cout<<"tree count: "<<count<<std::endl;
-            //std::cout<<"i: "<<i<<" bit: "<<brd[i]<<std::endl;
-            // add single bit to tree
-            // account for fact that waypoint id occurs once for x bits in BSD
-            if (count == BSDLEN){
-                std::cout<<"adding id:"<<waypointIds.at(idIndex)<<" to bit: "<<brd[i]<<std::endl;
-                addBit(brd[i], waypointIds.at(idIndex++));
-                count = 0;
+        int index = 0;
+        for (int i = (BRD_LEN*BSDLEN)-1; i >= 0; i--){ // not in reverse, but for binary, 0 starst on far right
+            if (i % BSDLEN == 0){
+                addBit(brd[i], waypointIds.at(index++)); // add last element (becauase traversing brd in reverse
             } else {
                 addBit(brd[i], 0);
             }
-            count++;
         }
         increaseCurrentCount();
         // add last waypointId in vector to this point (= id of final waypoint in path)
-        // current->addWaypointId(waypointIds.back());
+        // TODO problem with adding this way is only final wp has id
+        // could fix that by generating BRDs with this same tree for len 2 - 80...and storing only unique ids...
+        //current->addWaypointId(waypointIds.back());
     }
     
     // used to add single bit to tree, uses 'current' node
@@ -155,29 +151,26 @@ public:
         // if bit 0, go left
         if (bit == 0){
             if (current->left == NULL){
-                current->left = createNode(bit, waypointId);
+                current->left = createNode(bit);
             }
             if (waypointId != 0){
-                current->addWaypointId(waypointId);
+                current->left->addWaypointId(waypointId);
             }
             current = current->left;
         } else {
             if (current->right == NULL){
-                current->right = createNode(bit, waypointId);
+                current->right = createNode(bit);
             }
             if (waypointId != 0){
-                current->addWaypointId(waypointId);
+                current->right->addWaypointId(waypointId);
             }
             current = current->right;
         }
     }
     
-    Node* createNode(int bit, int waypointId){
+    Node* createNode(int bit){
         Node* n = new Node();
         n->setBit(bit);
-        if (waypointId != 0){ // only add valid ids
-            n->addWaypointId(waypointId);
-        }
         return n;
     }
     
@@ -191,6 +184,8 @@ public:
         std::string p = "";
         printTree(&root, p, BRD_LEN*BSDLEN);
         printStats();
+        //std::cout<<"\nPRINTING TEST TREE: " << std::endl;
+        //printTestTree(&root);
     }
     
     void printTree(Node* n, std::string p, int cnt){
@@ -215,19 +210,20 @@ public:
             cnt--;
         }
         
-        // loop over waypoint ids to print
-        std::vector<int> temp = n->getWaypointIds();
-        for (int i = 0; i < temp.size(); i++){
-            std::cout<<temp.at(i)<<" ";
-        }
-        
         if (cnt <= 0){
-            std::cout << p << " - ids:( ";
             
-            std::cout<<") - #:";
+            // loop over waypoint ids to print
+            std::cout<<std::endl<<"wp: ";
+            std::vector<int> temp = n->getWaypointIds();
+            for (int i = 0; i < temp.size(); i++){
+                std::cout<<temp.at(i)<<" ";
+            } std::cout<<std::endl;
+    
+            std::cout <<"path: "<< p << " - ";
+            
             // print path count
-            std::cout<<std::setw(3)<<n->count<< " : ";
-            // print square for each occurance of path
+            std::cout<<"cnt: "<<std::setw(3)<<n->count;
+            // print square symbol for each occurance of path
             //for (int i = n->count; i > 0; i--){
             //    std::cout<<"\u25A0";
             //}
@@ -254,6 +250,22 @@ public:
          file.close();
          */
         
+    }
+    
+    void printTestTree(Node* n){
+        if (n->left != NULL){
+            n->left->printNode();
+        }
+        if (n->right != NULL){
+            n->right->printNode();
+        }
+        std::cout<<std::endl;
+        if (n->left != NULL) {
+            printTestTree(n->left);
+        }
+        if (n->right != NULL) {
+            printTestTree(n->right);
+        }
     }
     
     void printStats(){
