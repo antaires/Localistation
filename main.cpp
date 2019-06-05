@@ -496,9 +496,9 @@ public:
         int rankCount = 0;
         int correctIdIndex = 0;
         
-        for(int j=0; j <= maxDistanceFrequency; j++){
             for(int i=0; i< TOTAL_DISTANCE; i++){
                 rankCount = distanceHist[i] + rankCount;
+                for(int j=0; j <= maxDistanceFrequency; j++){
                 if (waypointIds[i].size() > j){
                     if (waypointIds[i].at(j) == correctId){
                         correctIdIndex = i;
@@ -804,7 +804,6 @@ public:
         // rank correct id and store information in another histogram
         cPath.setRank();
         int r = cPath.getRank();
-        std::cout<<"getting rank from p.distanceAllPaths: "<<r<<std::endl;
         if (r > RANK_STATS_SIZE -1 ){
             r = RANK_STATS_SIZE -1;
         }
