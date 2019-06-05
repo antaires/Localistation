@@ -22,14 +22,14 @@
 #include <map> // for storing unique BRDs and counting how often they occur
 
 // adding to new github
-#define DIRECTED true
-#define BRD_LEN 2 // number of waypoints in BRD
-#define TOTAL_WAYPOINTS 6 // total number of waypoints entered in text file
+#define DIRECTED false
+#define BRD_LEN 20 // number of waypoints in BRD
+#define TOTAL_WAYPOINTS 284 // total number of waypoints entered in text file
 #define MAXLINELEN 100 // maximum length of waypoint data for total waypoints < 1000 (000 00 heading x y 000 000 000....?)
-#define BSDLEN 2 // number of bits in a BSD
-// #define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/data/undirected/doors_walls_FBLR/distance2/data_distance2_284_FBLR.txt"
+#define BSDLEN 4 // number of bits in a BSD
+#define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/data/undirected/doors_walls_FBLR/distance2/data_distance2_284_FBLR.txt"
 //test datafile
-#define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/testData3.txt"
+//#define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/testData3.txt"
 #define OUTPUT "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/histogram_output/output.txt"
 // don't change
 #define STATS_ARR_LEN 102
@@ -144,6 +144,7 @@ public:
         // TODO problem with adding this way is only final wp has id
         // could fix that by generating BRDs with this same tree for len 2 - 80...and storing only unique ids...
         //current->addWaypointId(waypointIds.back());
+        // TODO is this method better? will method I'm using now give incorrect results?
     }
     
     // used to add single bit to tree, uses 'current' node
@@ -213,16 +214,16 @@ public:
         if (cnt <= 0){
             
             // loop over waypoint ids to print
-            std::cout<<std::endl<<"wp: ";
+            std::cout<<std::endl<<"wpId: ";
             std::vector<int> temp = n->getWaypointIds();
             for (int i = 0; i < temp.size(); i++){
                 std::cout<<temp.at(i)<<" ";
             } std::cout<<std::endl;
     
-            std::cout <<"path: "<< p << " - ";
+            std::cout <<"path: "<< p << " --:";
             
             // print path count
-            std::cout<<"cnt: "<<std::setw(3)<<n->count;
+            std::cout<<std::setw(3)<<n->count;
             // print square symbol for each occurance of path
             //for (int i = n->count; i > 0; i--){
             //    std::cout<<"\u25A0";
@@ -482,12 +483,6 @@ public:
         
         // add waypointId to vector of ids
         waypointIds.push_back(w.id);
-        // TESTING
-        std::cout<<"\nWaypoint ids for path: "<<path<<" ";
-        for (int i = 0; i < waypointIds.size(); i++){
-            std::cout<<" "<<waypointIds.at(i);
-        }
-        std::cout<<std::endl;
         
         // check for connections if path length not reached yet
         if (path.length() < len * BSDLEN){
