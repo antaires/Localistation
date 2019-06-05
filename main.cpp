@@ -34,7 +34,7 @@
 #define TOTAL_DISTANCE BRD_LEN*BSDLEN // largest distance that will be counted - needn't be larger than pathlength
 // distance stats
 #define LOWER_RANGE 30
-#define UPPER_RANGE 60
+#define UPPER_RANGE 50
 // don't change
 #define STATS_ARR_LEN 102
 #define ARRLEN TOTAL_WAYPOINTS + 1 // length of waypoint arr (total num of waypoints + 1) - each waypoint stored as its id
@@ -463,6 +463,7 @@ public:
     std::vector<int> waypointIds[TOTAL_DISTANCE];
     int correctId;
     int maxDistanceFrequency = 0;
+    int rank = -1; // rank of correct id
     DistanceStats(){
         
     }
@@ -534,8 +535,7 @@ public:
     void corrupt25(){
         // loop over bits and flip 25% of the time (for total accuracy of 75%)
         for (int i = (BRD_LEN*BSDLEN)-1; i >= 0; i--){ // not in reverse, but for binary, 0 starst on far right
-            // if bit 1, 25% chance it becomes a 0
-            // if bit 0, 25% chance it becomes a 1
+            // flips bit 25% of the time
             if (flip25()){
                 corruptPath[i] = !corruptPath[i];
             }
@@ -613,6 +613,7 @@ public:
     BTree btree = BTree();
     //std::stack<Waypoint> stack; // stack for DFS TODO -- not needed if doing recursively
     CorruptPath cPath = CorruptPath();
+    int correctIdRank[10];
     
     Paths (int l, WaypointArray *warr){ // construct with desired length, waypoint array, and stats array
         len = l;
@@ -739,6 +740,8 @@ public:
         for(int i=0; i < allPaths.size(); i++){
             cPath.hamming(allPaths.at(i).path, allPaths.at(i).id);
         }
+        
+        // rank correct id and store information in another histogram
     }
     
     void printStats(){
