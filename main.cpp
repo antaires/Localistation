@@ -22,7 +22,6 @@
 #include <map> // for storing unique BRDs and counting how often they occur
 
 // adding to new github
-#define DIRECTED false
 #define BRD_LEN 5 // number of waypoints in BRD
 #define TOTAL_WAYPOINTS 284 // total number of waypoints entered in text file
 #define MAXLINELEN 100 // maximum length of waypoint data for total waypoints < 1000 (000 00 heading x y 000 000 000....?)
@@ -31,12 +30,13 @@
 //test datafile
 //#define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/testData3.txt"
 #define OUTPUT "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/histogram_output/output.txt"
-#define TOTAL_DISTANCE BRD_LEN*BSDLEN // largest distance that will be counted - needn't be larger than pathlength
 // distance stats
 #define LOWER_RANGE 0
 #define UPPER_RANGE 20
 #define RANK_STATS_SIZE 11
 // don't change
+#define TOTAL_DISTANCE BRD_LEN*BSDLEN // largest distance that will be counted - needn't be larger than pathlength
+#define DIRECTED false
 #define STATS_ARR_LEN 102
 #define ARRLEN TOTAL_WAYPOINTS + 1 // length of waypoint arr (total num of waypoints + 1) - each waypoint stored as its id
 
@@ -815,20 +815,31 @@ public:
     }
     
     void printRankStats(){
+        int firstRankTotal = rankHist[1];
+        int nonFirstRankTotal = 0;
+        float percentRank1;
         std::cout<<"RANK HISTOGRAM"<<std::endl;
         std::cout<<"ranks 1 to (Max-1) are true ranks. Ranks over the size of array are all added into final slot\n";
         std::cout<<"for ties, the correct id takes the lowest position\n\n";
         for(int i=1; i < RANK_STATS_SIZE; i++){
-            std::cout<<std::setw(3)<<rankHist[i];
+            std::cout<<std::setw(5)<<rankHist[i];
+            // sum all ranks
+            nonFirstRankTotal += rankHist[i];
         } std::cout<<std::endl;
         // print line
         for(int i=1; i < RANK_STATS_SIZE; i++){
-            std::cout<<"---";
+            std::cout<<"-----";
         } std::cout<<std::endl;
         // print rank numbers
         for(int i=1; i < RANK_STATS_SIZE; i++){
-            std::cout<<std::setw(3)<<i; //TODO should this be i+1?
+            std::cout<<std::setw(5)<<i; //TODO should this be i+1?
         } std::cout<<std::endl;
+        
+        percentRank1 = ((float)firstRankTotal / (float)nonFirstRankTotal) * 100.0;
+        std::cout<<"\n1st rank count: "<<firstRankTotal<<std::endl;
+        std::cout<<"all other ranks: "<<nonFirstRankTotal<<std::endl;
+        std::cout<<"\nFirst rank %: "<<percentRank1<<std::endl;
+        std::cout<<std::endl;
     }
 };
 
@@ -875,9 +886,9 @@ int main(int argc, const char * argv[]) {
         // to start, I'll just pick a path
     
     // TODO LOOP OVER THIS X TIMES
-    for(int i=0; i < 2; i++){
+    for(int i=0; i < 100; i++){
         p.distanceAllPaths();
-        p.printStats();
+        //p.printStats();
     }
     p.printRankStats();
     // TODO Print total rank stats
