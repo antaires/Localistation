@@ -23,7 +23,7 @@
 
 // adding to new github
 #define DIRECTED false
-#define BRD_LEN 5 // number of waypoints in BRD
+#define BRD_LEN 40 // number of waypoints in BRD
 #define TOTAL_WAYPOINTS 284 // total number of waypoints entered in text file
 #define MAXLINELEN 100 // maximum length of waypoint data for total waypoints < 1000 (000 00 heading x y 000 000 000....?)
 #define BSDLEN 4 // number of bits in a BSD
@@ -32,6 +32,9 @@
 //#define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/testData3.txt"
 #define OUTPUT "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/histogram_output/output.txt"
 #define TOTAL_DISTANCE BRD_LEN*BSDLEN // largest distance that will be counted - needn't be larger than pathlength
+// distance stats
+#define LOWER_RANGE 30
+#define UPPER_RANGE 60
 // don't change
 #define STATS_ARR_LEN 102
 #define ARRLEN TOTAL_WAYPOINTS + 1 // length of waypoint arr (total num of waypoints + 1) - each waypoint stored as its id
@@ -478,23 +481,31 @@ public:
     void printStats(){
         std::cout<<"\nDISTANCE STATS: "<<std::endl;
         // draw how many paths fall under each distance
-        for(int i=0; i < TOTAL_DISTANCE; i++){
+        for(int i=LOWER_RANGE; i < UPPER_RANGE; i++){
             std::cout<<std::setw(5)<<distanceHist[i];
         } std::cout<<std::endl;
         // draw dividing line
-        for(int i=0; i< TOTAL_DISTANCE; i++){
+        for(int i=LOWER_RANGE; i< UPPER_RANGE; i++){
             std::cout<<"-----";
         } std::cout<<std::endl;
         // draw distance value
-        for(int i=0; i< TOTAL_DISTANCE; i++){
+        for(int i=LOWER_RANGE; i< UPPER_RANGE; i++){
             std::cout<<std::setw(5)<<i;
+        } std::cout<<std::endl;
+        // draw dividing line
+        for(int i=LOWER_RANGE; i< UPPER_RANGE; i++){
+            std::cout<<"^^^^^";
         } std::cout<<std::endl;
         // draw which waypoint id's appear at each distance value
         for(int j=0; j <= maxDistanceFrequency; j++){ // TODO: < or <=
-            for(int i=0; i< TOTAL_DISTANCE; i++){
+            for(int i=LOWER_RANGE; i< UPPER_RANGE; i++){
                 // draw waypoint id or if none, draw 3 spaces
                 if (waypointIds[i].size() > j){
-                    std::cout<<std::setw(5)<<waypointIds[i].at(j);
+                    if (waypointIds[i].at(j) == correctId){
+                        std::cout<<"*!!!*";
+                    } else {
+                        std::cout<<std::setw(5)<<waypointIds[i].at(j);
+                    }
                 } else {
                     std::cout<<"    .";
                 }
@@ -504,7 +515,7 @@ public:
 };
 
 // ---------------------- //
-// ------ PATH ---------- //
+// ------ CORRUPTPATH --- //
 // ---------------------- //
 class CorruptPath {
 public:
@@ -523,8 +534,9 @@ public:
     void corrupt25(){
         // loop over bits and flip 25% of the time (for total accuracy of 75%)
         for (int i = (BRD_LEN*BSDLEN)-1; i >= 0; i--){ // not in reverse, but for binary, 0 starst on far right
-            if (prob()){
-                // flip bit
+            // if bit 1, 25% chance it becomes a 0
+            // if bit 0, 25% chance it becomes a 1
+            if (flip25()){
                 corruptPath[i] = !corruptPath[i];
             }
         }
@@ -540,8 +552,13 @@ public:
                 // 0 ^ 1 = 1
                 // 1 ^ 1 = 0
         distance = (int)(corruptPath ^ path).count();
+        //for (int i = (BRD_LEN*BSDLEN)-1; i >= 0; i--){ // not in reverse, but for binary, 0 starst on far right
+        //    if (corruptPath[i] ^ path[i]){
+        //        distance++;
+        //   }
+        //}
         distanceStats.addDistance(distance, id);
-        std::cout<<"hamming distance: "<<distance<<std::endl;
+        //std::cout<<"hamming distance: "<<distance<<std::endl;
     }
     
     void levenshtein(){
@@ -558,17 +575,22 @@ public:
         return rand() & 1;
     }
     
-    int rand75(){
-        // returns 1 25% of time, and 0 75% of time
+    bool flip25(){
+        // returns true 25% of the time
+        if (rand50() | rand50()){
+            return false;
+        }
+        return true;
+    }
+    
+    int rand0_75(){
+        // returns 0 75% of time, returns 1 25% of time
         return rand50() & rand50();
     }
     
-    bool prob(){
-        // function to return TRUE 25% of the time using bitwise AND
-        if (rand75() == 1){
-            return true;
-        }
-        return false;
+    int rand1_75(){
+        // returns 1 75% of time, returns 0 25% of time
+        return rand50() | rand50();
     }
     
     void printPath(){
@@ -644,9 +666,6 @@ public:
             // convert string to bit
             std::bitset<(BRD_LEN*BSDLEN)> brd(path);
             btree.addBrd(brd, waypointIds);
-            
-            // some random probability of sampling a path here?
-            // TODO
         }
     }
     
@@ -665,13 +684,11 @@ public:
     std::string rotateWaypoint(Waypoint w, double heading){
         // if (nextWpHeading + heading is between (0 & 90) || (270 & 360) keep same BSD
         // else, switch (mirror) bsd (when between 91 * 269) switch <-- do this version
-        
         double temp = w.rot + heading;
         if ( (temp > 90 + w.rot) && (temp < 270 + w.rot) ){ // + w.rot accounts for w.rot that is not 0
             //switch
             return switchBsd(w.bsd);
         }
-        // TODO Unity: translate wp heading from -60 (+360) to keep positive values
         return w.bsd;
     }
     
@@ -704,10 +721,8 @@ public:
         return bsd;
     }
     
-    void corruptPath(){
+    void corruptPath(std::bitset<(BRD_LEN*BSDLEN)> pathToCorrupt, int correctId){
         // TESTING: I'm picking path, will randomise this!
-        std::bitset<(BRD_LEN*BSDLEN)> pathToCorrupt("11110010000000100000");
-        int correctId = 280;
         std::cout<<"uncorrupted:"<<pathToCorrupt<<std::endl;
         cPath.setPath(pathToCorrupt, correctId);
         cPath.printPath();
@@ -716,11 +731,18 @@ public:
     void distanceAllPaths(){
         // loop over tree, and calculate distance between corruptPath and all other paths
         std::vector<SinglePath> allPaths = btree.getAllPaths();
+        
+        // pick 1 path randomly as target path, and corrupt it
+        int index = rand() % allPaths.size();
+        corruptPath(allPaths.at(index).path, allPaths.at(index).id);
+        
         for(int i=0; i < allPaths.size(); i++){
             cPath.hamming(allPaths.at(i).path, allPaths.at(i).id);
         }
+    }
+    
+    void printStats(){
         cPath.printStats();
-        // TODO print hamming AND L. distances
     }
 };
 
@@ -728,6 +750,8 @@ public:
 // ------- MAIN --------- //
 // ---------------------- //
 int main(int argc, const char * argv[]) {
+    
+    srand((unsigned int)time(0));
     
     /*
      // find current working directy
@@ -765,15 +789,8 @@ int main(int argc, const char * argv[]) {
         // to start, I'll just pick a path
     
     // corrupt the path 25%
-    p.corruptPath();
     p.distanceAllPaths();
-    
-    // find hamming distance between corrupt path and all other paths
-    // (later try L. distance too and compare)
-    
-    // rank closest 10-20 paths
-    
-    // print out rank of correct path
+    p.printStats();
     
     return 0;
 }
