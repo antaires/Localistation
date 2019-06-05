@@ -23,7 +23,7 @@
 
 // adding to new github
 #define DIRECTED false
-#define BRD_LEN 20 // number of waypoints in BRD
+#define BRD_LEN 5 // number of waypoints in BRD
 #define TOTAL_WAYPOINTS 284 // total number of waypoints entered in text file
 #define MAXLINELEN 100 // maximum length of waypoint data for total waypoints < 1000 (000 00 heading x y 000 000 000....?)
 #define BSDLEN 4 // number of bits in a BSD
@@ -31,13 +31,10 @@
 //test datafile
 //#define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/testData3.txt"
 #define OUTPUT "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/histogram_output/output.txt"
+#define TOTAL_DISTANCE BRD_LEN*BSDLEN // largest distance that will be counted - needn't be larger than pathlength
 // don't change
 #define STATS_ARR_LEN 102
 #define ARRLEN TOTAL_WAYPOINTS + 1 // length of waypoint arr (total num of waypoints + 1) - each waypoint stored as its id
-
-// FOR TESTING
-// // id BSD(left,right) rotation posX posY connection_ids (variable length)
-// std::string data = "1 11 -1 -1 -1\n2 10 1 -1 4\n3 01 2 -1 -1\n4 00 -1 -1 -1\n5 11 3 -1 -1\n6 01 5 -1 -1";
 
 // ---------------------- //
 // ------ NODE ---------- //
@@ -123,9 +120,7 @@ public:
     
     // used to add a full path to tree (tree built as paths added)
     // ends: count increased and returns to root
-    void addBrd(std::string str_brd, std::vector<int> waypointIds){
-        // convert string to bit
-        std::bitset<(BRD_LEN*BSDLEN)> brd(str_brd); // TODO potentially move this to Paths
+    void addBrd(std::bitset<(BRD_LEN*BSDLEN)> brd, std::vector<int> waypointIds){
         
         //resetToRoot();
         current = &root;
@@ -140,11 +135,6 @@ public:
             }
         }
         increaseCurrentCount();
-        // add last waypointId in vector to this point (= id of final waypoint in path)
-        // TODO problem with adding this way is only final wp has id
-        // could fix that by generating BRDs with this same tree for len 2 - 80...and storing only unique ids...
-        //current->addWaypointId(waypointIds.back());
-        // TODO is this method better? will method I'm using now give incorrect results?
     }
     
     // used to add single bit to tree, uses 'current' node
@@ -440,6 +430,126 @@ public:
 };
 
 // ---------------------- //
+// --- DistanceStats ---- //
+// ---------------------- //
+class DistanceStats {
+public:
+    int distanceHist[TOTAL_DISTANCE]; //to occurance count distances
+    // array of vectors to hold waypointIds that fall at each distance
+    std::vector<int> waypointIds[TOTAL_DISTANCE];
+    int correctId;
+    int maxDistanceFrequency = 0;
+    DistanceStats(){}
+    void setId(int id){
+        correctId = id;
+    }
+    void addDistance(int distanceIndex, int waypointId){
+        distanceHist[distanceIndex] = distanceHist[distanceIndex] + 1;
+        // add id to waypointId array at distanceIndex
+        waypointIds[distanceIndex].push_back(waypointId);
+        // track largest waypointId vector for printing purposes
+        if (waypointIds[distanceIndex].size() > maxDistanceFrequency){
+            maxDistanceFrequency = (int) waypointIds[distanceIndex].size();
+        }
+    }
+    void printStats(){
+        std::cout<<"\nDISTANCE STATS: "<<std::endl;
+        // draw how many paths fall under each distance
+        for(int i=0; i < TOTAL_DISTANCE; i++){
+            std::cout<<std::setw(3)<<distanceHist[i];
+        } std::cout<<std::endl;
+        // draw dividing line
+        for(int i=0; i< TOTAL_DISTANCE; i++){
+            std::cout<<"---";
+        } std::cout<<std::endl;
+        // draw distance value
+        for(int i=0; i< TOTAL_DISTANCE; i++){
+            std::cout<<std::setw(3)<<i;
+        } std::cout<<std::endl;
+        // draw which waypoint id's appear at each distance value
+        for(int i=0; i< TOTAL_DISTANCE; i++){
+            for(int j=0; j <= maxDistanceFrequency; j++){ // TODO: < or <=
+                // draw waypoint id or if none, draw 3 spaces
+                if (waypointIds[i].size() <= j){
+                    std::cout<<" "<<waypointIds[i].at(j)<<" ";
+                } else {
+                    std::cout<<"   ";
+                }
+            } std::cout<<std::endl;
+        }
+    }
+};
+
+// ---------------------- //
+// ------ PATH ---------- //
+// ---------------------- //
+class CorruptPath {
+public:
+    std::bitset<(BRD_LEN*BSDLEN)> corruptPath;
+    std::vector<int> waypointIds;
+    DistanceStats distanceStats = DistanceStats();
+    bool isCorrupted;
+    CorruptPath(){
+        isCorrupted = false;
+    }
+    void addPath(std::bitset<(BRD_LEN*BSDLEN)> path, int correctId){
+        distanceStats.setId(correctId);
+        corruptPath = path;
+        corrupt25();
+    }
+    void corrupt25(){
+        // loop over bits and flip 25% of the time (for total accuracy of 75%)
+        for (int i = (BRD_LEN*BSDLEN)-1; i >= 0; i--){ // not in reverse, but for binary, 0 starst on far right
+            if (prob()){
+                // flip bit
+                corruptPath[i] = !corruptPath[i];
+            }
+        }
+        isCorrupted = true;
+    }
+    int hamming(){
+        // find hamming distance between corrupt path and input path, and store to DistanceStats
+        int distance = 0;
+        
+        return distance;
+    }
+    int levenshtein(){
+        // find levenshtein distance between corrupt path and input path, and store to DistanceStats
+        int distance = 0;
+        return distance;
+    }
+    
+    // probability function from www.geeksforgeeks.org/generate-0-1-25-75-probability
+    int rand50(){
+        // returns 0 50% of the time and 1 50% of the time
+        // because rand() generates odd/even numbers in equal probability
+        // and odd returns 1 and even will return 0
+        return rand() & 1;
+    }
+    
+    int rand75(){
+        // returns 1 25% of time, and 0 75% of time
+        return rand50() & rand50();
+    }
+    
+    bool prob(){
+        // function to return TRUE 25% of the time using bitwise AND
+        if (rand75() == 1){
+            return true;
+        }
+        return false;
+    }
+    
+    void printPath(){
+        std::cout<<"corrupted  :"<<corruptPath<<"\ncorrect id :"<<distanceStats.correctId<<std::endl;
+    }
+    
+    void printStats(){
+        distanceStats.printStats();
+    }
+};
+
+// ---------------------- //
 // ------ PATHS --------- //
 // ---------------------- //
 class Paths {
@@ -449,6 +559,7 @@ public:
     WaypointArray wa;
     BTree btree = BTree();
     //std::stack<Waypoint> stack; // stack for DFS TODO -- not needed if doing recursively
+    CorruptPath cPath = CorruptPath();
     
     Paths (int l, WaypointArray *warr){ // construct with desired length, waypoint array, and stats array
         len = l;
@@ -499,7 +610,12 @@ public:
         
         // path has reached limit add to tree if long enough
         if (path.length() == len * BSDLEN){
-            btree.addBrd(path, waypointIds);
+            // convert string to bit
+            std::bitset<(BRD_LEN*BSDLEN)> brd(path);
+            btree.addBrd(brd, waypointIds);
+            
+            // some random probability of sampling a path here?
+            // TODO
         }
     }
     
@@ -556,6 +672,20 @@ public:
         std::cout<<"POTENTIAL ERROR: CHECK switchBsd() for correct BSD length"<<std::endl;
         return bsd;
     }
+    
+    void corruptPath(){
+        // TESTING: I'm picking path, will randomise this!
+        std::bitset<(BRD_LEN*BSDLEN)> pathToCorrupt("11110010000000100000");
+        int correctId = 280;
+        std::cout<<"uncorrupted:"<<pathToCorrupt<<std::endl;
+        cPath.addPath(pathToCorrupt, correctId);
+        cPath.printPath();
+        
+        // TODO loop over tree, and calculate distance between corruptPath and all paths
+        
+        
+        // TODO print distance STATS (via corruptPath)
+    }
 };
 
 // ---------------------- //
@@ -591,6 +721,22 @@ int main(int argc, const char * argv[]) {
     p.generatePaths();
     //p.print();
     std::cout << "paths generated" << std::endl;
+    
+    // TESTING CORRUPTED PATHS FOR MATCHES
+    std::cout << "corrupt path test:"<< std::endl;
+    // pick a random unique path, and store final waypointId of path (this will be used for accuracy)
+        // could randomly pick one while generating tree?
+        // to start, I'll just pick a path
+    
+    // corrupt the path 25%
+    p.corruptPath();
+    
+    // find hamming distance between corrupt path and all other paths
+    // (later try L. distance too and compare)
+    
+    // rank closest 10-20 paths
+    
+    // print out rank of correct path
     
     return 0;
 }
