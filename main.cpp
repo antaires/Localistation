@@ -23,7 +23,7 @@
 
 // adding to new github
 #define DIRECTED false
-#define BRD_LEN 40 // number of waypoints in BRD
+#define BRD_LEN 5 // number of waypoints in BRD
 #define TOTAL_WAYPOINTS 284 // total number of waypoints entered in text file
 #define MAXLINELEN 100 // maximum length of waypoint data for total waypoints < 1000 (000 00 heading x y 000 000 000....?)
 #define BSDLEN 4 // number of bits in a BSD
@@ -33,8 +33,9 @@
 #define OUTPUT "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/histogram_output/output.txt"
 #define TOTAL_DISTANCE BRD_LEN*BSDLEN // largest distance that will be counted - needn't be larger than pathlength
 // distance stats
-#define LOWER_RANGE 30
-#define UPPER_RANGE 50
+#define LOWER_RANGE 0
+#define UPPER_RANGE 20
+#define RANK_STATS_SIZE 11
 // don't change
 #define STATS_ARR_LEN 102
 #define ARRLEN TOTAL_WAYPOINTS + 1 // length of waypoint arr (total num of waypoints + 1) - each waypoint stored as its id
@@ -102,7 +103,7 @@ class BTree {
 public:
     Node root;
     Node* current;
-    std::vector<SinglePath> allPaths;
+    std::vector<SinglePath> allPaths; // TODO potentially pass this as pointer to Paths class
     int statsArray[STATS_ARR_LEN]; // stats array - track how many paths occur 1 - 100 times (lump all others together under 101)
     
     /*
@@ -415,7 +416,6 @@ public:
                     w.id = stringToInt(buf);
                 } else if (wordCount == 1){
                     w.bsd = buf;
-                    // TODO: access rotation and position of waypoint
                 } else if (wordCount == 2){
                     w.rot = stringToDouble(buf);
                 } else if (wordCount == 3){
@@ -465,11 +465,23 @@ public:
     int maxDistanceFrequency = 0;
     int rank = -1; // rank of correct id
     DistanceStats(){
-        
+        // initialize array of vectors
+        for (int i=0; i < TOTAL_DISTANCE; i++){
+            waypointIds[i] = std::vector<int>();
+        }
     }
+    
+    void reset(){
+        for (int i=0; i < TOTAL_DISTANCE; i++){
+            distanceHist[i] = 0;
+            waypointIds[i].clear();
+        }
+    }
+    
     void setId(int id){
         correctId = id;
     }
+    
     void addDistance(int distanceIndex, int waypointId){
         distanceHist[distanceIndex] = distanceHist[distanceIndex] + 1;
         // add id to waypointId array at distanceIndex
@@ -479,6 +491,32 @@ public:
             maxDistanceFrequency = (int) waypointIds[distanceIndex].size();
         }
     }
+    
+    void setRank(){ // TODO how do I deal with TIES? - currently, rank is taken as lower rank of tie
+        int rankCount = 0;
+        int correctIdIndex = 0;
+        
+        for(int j=0; j <= maxDistanceFrequency; j++){
+            for(int i=0; i< TOTAL_DISTANCE; i++){
+                rankCount = distanceHist[i] + rankCount;
+                if (waypointIds[i].size() > j){
+                    if (waypointIds[i].at(j) == correctId){
+                        correctIdIndex = i;
+                        i = TOTAL_DISTANCE;
+                        j = maxDistanceFrequency;
+                    }
+                }
+            }
+        }
+        std::cout<<"correctIdIndex: "<<correctIdIndex;
+        std::cout<<"\nrank:       : "<<rankCount<<std::endl;
+        rank = rankCount;
+    }
+    
+    int getRank(){
+        return rank;
+    }
+    
     void printStats(){
         std::cout<<"\nDISTANCE STATS: "<<std::endl;
         // draw how many paths fall under each distance
@@ -597,6 +635,20 @@ public:
         std::cout<<"corrupted  :"<<corruptPath<<"\ncorrect id :"<<distanceStats.correctId<<std::endl;
     }
     
+    void setRank(){
+        distanceStats.setRank();
+    }
+    
+    int getRank(){
+        return distanceStats.getRank();
+    }
+    
+    void reset(){
+        distanceStats.reset();
+        waypointIds.clear();
+        isCorrupted = false;
+    }
+    
     void printStats(){
         distanceStats.printStats();
     }
@@ -613,11 +665,16 @@ public:
     BTree btree = BTree();
     //std::stack<Waypoint> stack; // stack for DFS TODO -- not needed if doing recursively
     CorruptPath cPath = CorruptPath();
-    int correctIdRank[10];
+    int rankHist[RANK_STATS_SIZE] = {0}; // 1-10 are true counts, 11 is everything else over 10
     
     Paths (int l, WaypointArray *warr){ // construct with desired length, waypoint array, and stats array
         len = l;
         wa = *warr;
+    }
+    
+    void reset(){
+        cPath.reset();
+        marker = 0;
     }
     
     void generatePaths(){ // input path length for BRDs
@@ -730,6 +787,9 @@ public:
     }
     
     void distanceAllPaths(){
+        // set all used values to 0
+        reset();
+        
         // loop over tree, and calculate distance between corruptPath and all other paths
         std::vector<SinglePath> allPaths = btree.getAllPaths();
         
@@ -742,10 +802,34 @@ public:
         }
         
         // rank correct id and store information in another histogram
+        cPath.setRank();
+        int r = cPath.getRank();
+        std::cout<<"getting rank from p.distanceAllPaths: "<<r<<std::endl;
+        if (r > RANK_STATS_SIZE -1 ){
+            r = RANK_STATS_SIZE -1;
+        }
+        rankHist[r] = rankHist[r] + 1;
     }
     
     void printStats(){
         cPath.printStats();
+    }
+    
+    void printRankStats(){
+        std::cout<<"RANK HISTOGRAM"<<std::endl;
+        std::cout<<"ranks 1 to (Max-1) are true ranks. Ranks over the size of array are all added into final slot\n";
+        std::cout<<"for ties, the correct id takes the lowest position\n\n";
+        for(int i=1; i < RANK_STATS_SIZE; i++){
+            std::cout<<std::setw(3)<<rankHist[i];
+        } std::cout<<std::endl;
+        // print line
+        for(int i=1; i < RANK_STATS_SIZE; i++){
+            std::cout<<"---";
+        } std::cout<<std::endl;
+        // print rank numbers
+        for(int i=1; i < RANK_STATS_SIZE; i++){
+            std::cout<<std::setw(3)<<i; //TODO should this be i+1?
+        } std::cout<<std::endl;
     }
 };
 
@@ -791,9 +875,13 @@ int main(int argc, const char * argv[]) {
         // could randomly pick one while generating tree?
         // to start, I'll just pick a path
     
-    // corrupt the path 25%
-    p.distanceAllPaths();
-    p.printStats();
+    // TODO LOOP OVER THIS X TIMES
+    for(int i=0; i < 2; i++){
+        p.distanceAllPaths();
+        p.printStats();
+    }
+    p.printRankStats();
+    // TODO Print total rank stats
     
     return 0;
 }
