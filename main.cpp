@@ -37,6 +37,19 @@
 #define ARRLEN TOTAL_WAYPOINTS + 1 // length of waypoint arr (total num of waypoints + 1) - each waypoint stored as its id
 
 // ---------------------- //
+// --- SINGLE PATH ------ //
+// ---------------------- /
+class SinglePath {
+public:
+    std::bitset<(BRD_LEN*BSDLEN)> path;
+    int id;
+    SinglePath(std::bitset<(BRD_LEN*BSDLEN)> brd, int waypointId){
+        path = brd;
+        id = waypointId;
+    }
+};
+
+// ---------------------- //
 // ------ NODE ---------- //
 // ---------------------- //
 class Node {
@@ -86,8 +99,8 @@ class BTree {
 public:
     Node root;
     Node* current;
+    std::vector<SinglePath> allPaths;
     int statsArray[STATS_ARR_LEN]; // stats array - track how many paths occur 1 - 100 times (lump all others together under 101)
-
     
     /*
      // the M is the capacity (8 = 8 bits)
@@ -135,6 +148,10 @@ public:
             }
         }
         increaseCurrentCount();
+        
+        // add brd to all paths
+        SinglePath singlePath = SinglePath(brd, waypointIds.back());
+        allPaths.push_back(singlePath);
     }
     
     // used to add single bit to tree, uses 'current' node
@@ -167,6 +184,10 @@ public:
     
     void increaseCurrentCount(){
         current->count++;
+    }
+    
+    std::vector<SinglePath> getAllPaths(){
+        return allPaths;
     }
     
     // go through each path of tree, build BRD, print waypoint ids vector, print count
@@ -434,12 +455,14 @@ public:
 // ---------------------- //
 class DistanceStats {
 public:
-    int distanceHist[TOTAL_DISTANCE]; //to occurance count distances
+    int distanceHist[TOTAL_DISTANCE] = {0}; //to occurance count distances
     // array of vectors to hold waypointIds that fall at each distance
     std::vector<int> waypointIds[TOTAL_DISTANCE];
     int correctId;
     int maxDistanceFrequency = 0;
-    DistanceStats(){}
+    DistanceStats(){
+        
+    }
     void setId(int id){
         correctId = id;
     }
@@ -456,24 +479,24 @@ public:
         std::cout<<"\nDISTANCE STATS: "<<std::endl;
         // draw how many paths fall under each distance
         for(int i=0; i < TOTAL_DISTANCE; i++){
-            std::cout<<std::setw(3)<<distanceHist[i];
+            std::cout<<std::setw(5)<<distanceHist[i];
         } std::cout<<std::endl;
         // draw dividing line
         for(int i=0; i< TOTAL_DISTANCE; i++){
-            std::cout<<"---";
+            std::cout<<"-----";
         } std::cout<<std::endl;
         // draw distance value
         for(int i=0; i< TOTAL_DISTANCE; i++){
-            std::cout<<std::setw(3)<<i;
+            std::cout<<std::setw(5)<<i;
         } std::cout<<std::endl;
         // draw which waypoint id's appear at each distance value
-        for(int i=0; i< TOTAL_DISTANCE; i++){
-            for(int j=0; j <= maxDistanceFrequency; j++){ // TODO: < or <=
+        for(int j=0; j <= maxDistanceFrequency; j++){ // TODO: < or <=
+            for(int i=0; i< TOTAL_DISTANCE; i++){
                 // draw waypoint id or if none, draw 3 spaces
-                if (waypointIds[i].size() <= j){
-                    std::cout<<" "<<waypointIds[i].at(j)<<" ";
+                if (waypointIds[i].size() > j){
+                    std::cout<<std::setw(5)<<waypointIds[i].at(j);
                 } else {
-                    std::cout<<"   ";
+                    std::cout<<"    .";
                 }
             } std::cout<<std::endl;
         }
@@ -492,7 +515,7 @@ public:
     CorruptPath(){
         isCorrupted = false;
     }
-    void addPath(std::bitset<(BRD_LEN*BSDLEN)> path, int correctId){
+    void setPath(std::bitset<(BRD_LEN*BSDLEN)> path, int correctId){
         distanceStats.setId(correctId);
         corruptPath = path;
         corrupt25();
@@ -507,16 +530,24 @@ public:
         }
         isCorrupted = true;
     }
-    int hamming(){
+    void hamming(std::bitset<(BRD_LEN*BSDLEN)> path, int id){
         // find hamming distance between corrupt path and input path, and store to DistanceStats
         int distance = 0;
-        
-        return distance;
+        // compute hamming distance - loop over bits, and add 1 to distance for every different bit
+        // use XOR so:
+                // 0 ^ 0 = 0
+                // 1 ^ 0 = 1
+                // 0 ^ 1 = 1
+                // 1 ^ 1 = 0
+        distance = (int)(corruptPath ^ path).count();
+        distanceStats.addDistance(distance, id);
+        std::cout<<"hamming distance: "<<distance<<std::endl;
     }
-    int levenshtein(){
+    
+    void levenshtein(){
         // find levenshtein distance between corrupt path and input path, and store to DistanceStats
-        int distance = 0;
-        return distance;
+        // TODO
+        // int distance = 0;
     }
     
     // probability function from www.geeksforgeeks.org/generate-0-1-25-75-probability
@@ -678,13 +709,18 @@ public:
         std::bitset<(BRD_LEN*BSDLEN)> pathToCorrupt("11110010000000100000");
         int correctId = 280;
         std::cout<<"uncorrupted:"<<pathToCorrupt<<std::endl;
-        cPath.addPath(pathToCorrupt, correctId);
+        cPath.setPath(pathToCorrupt, correctId);
         cPath.printPath();
-        
-        // TODO loop over tree, and calculate distance between corruptPath and all paths
-        
-        
-        // TODO print distance STATS (via corruptPath)
+    }
+    
+    void distanceAllPaths(){
+        // loop over tree, and calculate distance between corruptPath and all other paths
+        std::vector<SinglePath> allPaths = btree.getAllPaths();
+        for(int i=0; i < allPaths.size(); i++){
+            cPath.hamming(allPaths.at(i).path, allPaths.at(i).id);
+        }
+        cPath.printStats();
+        // TODO print hamming AND L. distances
     }
 };
 
@@ -730,6 +766,7 @@ int main(int argc, const char * argv[]) {
     
     // corrupt the path 25%
     p.corruptPath();
+    p.distanceAllPaths();
     
     // find hamming distance between corrupt path and all other paths
     // (later try L. distance too and compare)
