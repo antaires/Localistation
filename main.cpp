@@ -23,7 +23,7 @@
 
 // adding to new github
 #define DIRECTED false
-#define BRD_LEN 80 // number of waypoints in BRD
+#define BRD_LEN 20 // number of waypoints in BRD
 #define TOTAL_WAYPOINTS 284 // total number of waypoints entered in text file
 #define MAXLINELEN 100 // maximum length of waypoint data for total waypoints < 1000 (000 00 heading x y 000 000 000....?)
 #define BSDLEN 4 // number of bits in a BSD
@@ -46,6 +46,7 @@ class Node {
 public:
     int bit;
     int count;
+    std::vector <int> waypointIds; // list of waypoints that terminate at this node
     Node* left;
     Node* right;
     
@@ -62,6 +63,22 @@ public:
     
     int getBit(){
         return bit;
+    }
+    
+    void addWaypointId(int id){
+        waypointIds.push_back(id);
+    }
+    
+    std::vector<int> getWaypointIds(){
+        return waypointIds;
+    }
+    
+    void printNode(){
+        // print all contents of node to a single line, no new line after
+        std::cout<<"||NODE bit:"<<bit<<" cnt:"<<count<<" ids:";
+        for(int i = 0; i < waypointIds.size(); i++){
+            std::cout<<waypointIds.at(i)<<" ";
+        }
     }
 };
 
@@ -106,35 +123,47 @@ public:
     
     // used to add a full path to tree (tree built as paths added)
     // ends: count increased and returns to root
-    void addBrd(std::string str_brd){
+    void addBrd(std::string str_brd, std::vector<int> waypointIds){
         // convert string to bit
         std::bitset<(BRD_LEN*BSDLEN)> brd(str_brd); // TODO potentially move this to Paths
         
         //resetToRoot();
         current = &root;
         
-        //std::cout<<"path: " << str_brd<< std::endl;
-        
         // for each bit:
-        for (int i = (BRD_LEN*BSDLEN)-1; i >= 0; i--){
-            //std::cout<<"i: "<<i<<" bit: "<<brd[i]<<std::endl;
-            // add single bit to tree
-            addBit(brd[i]);
+        int index = 0;
+        for (int i = (BRD_LEN*BSDLEN)-1; i >= 0; i--){ // not in reverse, but for binary, 0 starst on far right
+            if (i % BSDLEN == 0){
+                addBit(brd[i], waypointIds.at(index++)); // add last element (becauase traversing brd in reverse
+            } else {
+                addBit(brd[i], 0);
+            }
         }
         increaseCurrentCount();
+        // add last waypointId in vector to this point (= id of final waypoint in path)
+        // TODO problem with adding this way is only final wp has id
+        // could fix that by generating BRDs with this same tree for len 2 - 80...and storing only unique ids...
+        //current->addWaypointId(waypointIds.back());
+        // TODO is this method better? will method I'm using now give incorrect results?
     }
     
     // used to add single bit to tree, uses 'current' node
-    void addBit(int bit){
+    void addBit(int bit, int waypointId){
         // if bit 0, go left
         if (bit == 0){
             if (current->left == NULL){
                 current->left = createNode(bit);
             }
+            if (waypointId != 0){
+                current->left->addWaypointId(waypointId);
+            }
             current = current->left;
         } else {
             if (current->right == NULL){
                 current->right = createNode(bit);
+            }
+            if (waypointId != 0){
+                current->right->addWaypointId(waypointId);
             }
             current = current->right;
         }
@@ -150,12 +179,14 @@ public:
         current->count++;
     }
     
-    // go through each path of tree, build BRD and print count
+    // go through each path of tree, build BRD, print waypoint ids vector, print count
     void print(){
         std::cout<<"PRINTING TREE: " << std::endl;
         std::string p = "";
         printTree(&root, p, BRD_LEN*BSDLEN);
         printStats();
+        //std::cout<<"\nPRINTING TEST TREE: " << std::endl;
+        //printTestTree(&root);
     }
     
     void printTree(Node* n, std::string p, int cnt){
@@ -181,10 +212,22 @@ public:
         }
         
         if (cnt <= 0){
-            std::cout << p << " - "<<std::setw(3)<<n->count<< " : ";
-            for (int i = n->count; i > 0; i--){
-                std::cout<<"\u25A0";
-            }
+            
+            // loop over waypoint ids to print
+            std::cout<<std::endl<<"wpId: ";
+            std::vector<int> temp = n->getWaypointIds();
+            for (int i = 0; i < temp.size(); i++){
+                std::cout<<temp.at(i)<<" ";
+            } std::cout<<std::endl;
+    
+            std::cout <<"path: "<< p << " --:";
+            
+            // print path count
+            std::cout<<std::setw(3)<<n->count;
+            // print square symbol for each occurance of path
+            //for (int i = n->count; i > 0; i--){
+            //    std::cout<<"\u25A0";
+            //}
             std::cout<<std::endl;
             // update stats info
             if (n->count <= 100){
@@ -208,6 +251,22 @@ public:
          file.close();
          */
         
+    }
+    
+    void printTestTree(Node* n){
+        if (n->left != NULL){
+            n->left->printNode();
+        }
+        if (n->right != NULL){
+            n->right->printNode();
+        }
+        std::cout<<std::endl;
+        if (n->left != NULL) {
+            printTestTree(n->left);
+        }
+        if (n->right != NULL) {
+            printTestTree(n->right);
+        }
     }
     
     void printStats(){
@@ -400,26 +459,30 @@ public:
         // loop over graph: start with 1 because waypoint0 is not used
         std::string path = ""; // TODO make path a Bit sequence?
         for (int i = 1; i < ARRLEN; i++){
+            std::vector<int> waypointIds; // to track waypoint id's along path
             wa.waypointArray[i].visited = true;
-            buildPath(path, wa.waypointArray[i], wa.waypointArray[i].pos); // build all paths starting at each waypoint in turn
+            buildPath(path, waypointIds, wa.waypointArray[i], wa.waypointArray[i].pos); // build all paths starting at each waypoint in turn
             wa.unvisitAll(); // clear "visited" bool to start next path
         }
         btree.print();
     }
     
-    void buildPath(std::string path, Waypoint w, Vector2d prevPos){
+    void buildPath(std::string path, std::vector<int> waypointIds, Waypoint w, Vector2d prevPos){
         w.visited = true;
         // access w.pos for current position
-        float heading = 0; // TODO UNITY: set lines to have 0 rotation
+        float heading = 0;
         
         // calculate heading for each new waypoint, and add w.bsd here in correct rotation
         heading = calculateHeading(prevPos, w.pos); // (prevPos, nextPos)
         
         if (DIRECTED){
             path = path + w.bsd;
-        } else { // apply rotation
-            path = path + rotateWaypoint(w, heading); // apply rotation -> not needed for directed graph
+        } else { // apply rotation as needed
+            path = path + rotateWaypoint(w, heading);
         }
+        
+        // add waypointId to vector of ids
+        waypointIds.push_back(w.id);
         
         // check for connections if path length not reached yet
         if (path.length() < len * BSDLEN){
@@ -429,14 +492,14 @@ public:
                 if (!(wa.waypointArray[w.conns[i]].visited)){
                     // need to pass in previous position to calculate heading
                     wa.waypointArray[w.conns[i]].visited = true; // prevent loops
-                    buildPath(path, wa.waypointArray[w.conns[i]], w.pos); // recursive call to continue building path
+                    buildPath(path, waypointIds, wa.waypointArray[w.conns[i]], w.pos); // recursive call to continue building path
                 }
             }
         }
         
         // path has reached limit add to tree if long enough
         if (path.length() == len * BSDLEN){
-            btree.addBrd(path);
+            btree.addBrd(path, waypointIds);
         }
     }
     
