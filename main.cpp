@@ -22,7 +22,7 @@
 #include <map> // for storing unique BRDs and counting how often they occur
 
 // adding to new github
-#define BRD_LEN 5 // number of waypoints in BRD
+#define BRD_LEN 20 // number of waypoints in BRD
 #define TOTAL_WAYPOINTS 284 // total number of waypoints entered in text file
 #define MAXLINELEN 100 // maximum length of waypoint data for total waypoints < 1000 (000 00 heading x y 000 000 000....?)
 #define BSDLEN 4 // number of bits in a BSD
@@ -703,6 +703,13 @@ public:
             path = path + rotateWaypoint(w, heading);
         }
         
+        // add turn bit -- TODO I THINK it should be added BEFORE w BSD, since it is
+        // determining prevPos to this w...
+        // OR could keep turn bits as a separate sequence? connected to a singlePath? could
+        // store turn bit on tree? becuase along tree, it should be that each turn bit will
+        // be in the correct location?
+        std::string turnBit = determineTurnBit(w, heading);
+        
         // add waypointId to vector of ids
         waypointIds.push_back(w.id);
         
@@ -737,6 +744,18 @@ public:
         // convert to degrees
         float theta_degrees = (theta_radians * M_PI) * 360.0 / (2.0 * M_PI);
         return theta_degrees;
+    }
+    
+    std::string determineTurnBit(Waypoint w, double heading){
+        // determines if a turn of greater than 20 degrees in either L/R has occurred
+        // turn = 1, no turn = 0
+        // to be added to BSD after rotation has been completed
+        std::string turnBit = "1";
+        double temp = w.rot + heading;
+        if ( (temp > 20 + w.rot) && (temp < 20 + w.rot) ){
+            turnBit = "0";
+        }
+        return turnBit;
     }
     
     std::string rotateWaypoint(Waypoint w, double heading){
