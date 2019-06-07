@@ -25,20 +25,30 @@
 #include <map> // for storing unique BRDs and counting how often they occur
 
 // adding to new github
-#define BRD_LEN 40 // number of waypoints in BRD
-#define TOTAL_WAYPOINTS 284 // total number of waypoints entered in text file
+#define BRD_LEN 3 // number of waypoints in BRD
+#define TOTAL_WAYPOINTS 7 // total number of waypoints entered in text file
 #define MAXLINELEN 100 // maximum length of waypoint data for total waypoints < 1000 (000 00 heading x y 000 000 000....?)
-#define BSDLEN 4 // number of bits in a BSD
-#define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/data/undirected/doors_walls_FBLR/distance2/data_distance2_284_FBLR.txt"
+#define BSDLEN 2 // number of bits in a BSD
+//#define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/data/undirected/doors_walls_FBLR/distance2/data_distance2_284_FBLR.txt"
 //test datafile
-//#define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/testData4.txt"
+#define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/testData5.txt"
 #define OUTPUT "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/histogram_output/output.txt"
 // distance stats
 #define LOWER_RANGE 0
 #define UPPER_RANGE 10
 #define RANK_STATS_SIZE 11
+
+// Change this depending on turn/heading bits (un)used
+// 0 = no turn info
+// 1 = 1 bit turn info
+// 2 = 2 bit turn info
+#define EXTRA_BITS 2 //number of bits added to semantic BSD from turns, heading etc
+
 // don't change
-#define TOTAL_DISTANCE BRD_LEN*BSDLEN + BRD_LEN// largest distance that will be counted - needn't be larger than pathlength
+#define BSD_PLUS_EXTRA BSDLEN+EXTRA_BITS
+#define BIT_SIZE BRD_LEN*BSDLEN + (BRD_LEN*EXTRA_BITS) // turn (2 bits - L/R)
+
+// don't change
 #define DIRECTED false
 #define STATS_ARR_LEN 102
 #define ARRLEN TOTAL_WAYPOINTS + 1 // length of waypoint arr (total num of waypoints + 1) - each waypoint stored as its id
@@ -48,10 +58,10 @@
 // ---------------------- /
 class SinglePath {
 public:
-    std::bitset<(BRD_LEN*BSDLEN + BRD_LEN)> path;
+    std::bitset<(BIT_SIZE)> path;
     // TODO store turn path as separate path, or append it to end?
     int id;
-    SinglePath(std::bitset<(BRD_LEN*BSDLEN + BRD_LEN)> brd, int waypointId){
+    SinglePath(std::bitset<(BIT_SIZE)> brd, int waypointId){
         path = brd;
         id = waypointId;
     }
@@ -141,16 +151,15 @@ public:
     
     // used to add a full path to tree (tree built as paths added)
     // ends: count increased and returns to root
-    void addBrd(std::bitset<(BRD_LEN*BSDLEN + BRD_LEN)> brd, std::vector<int> waypointIds){
+    void addBrd(std::bitset<(BIT_SIZE)> brd, std::vector<int> waypointIds){
         int index = 0;
         
         //resetToRoot();
         current = &root;
         
         // for each bit:
-        // TODO change to (BRD_LEN*BSDLEN + BRD_LEN)
-        for (int i = (BRD_LEN*BSDLEN + BRD_LEN)-1; i >= 0; i--){ // not in reverse, but for binary, 0 starts on far right
-            if (i % (BSDLEN+1) == 0){
+        for (int i = (BIT_SIZE)-1; i >= 0; i--){ // not in reverse, but for binary, 0 starts on far right
+            if (i % (BSD_PLUS_EXTRA) == 0){
                 addBit(brd[i], waypointIds.at(index++));
             } else {
                 addBit(brd[i], 0);
@@ -463,22 +472,22 @@ public:
 // ---------------------- //
 class DistanceStats {
 public:
-    int distanceHist[TOTAL_DISTANCE] = {0}; //to occurance count distances
+    int distanceHist[BIT_SIZE] = {0}; //to occurance count distances
     // array of vectors to hold waypointIds that fall at each distance
-    std::vector<int> waypointIds[TOTAL_DISTANCE];
+    std::vector<int> waypointIds[BIT_SIZE];
     int correctId;
     int maxDistanceFrequency = 0;
     int rank = -1; // rank of correct id
     DistanceStats(){
         // initialize array of vectors
-        for (int i=0; i < TOTAL_DISTANCE; i++){
+        for (int i=0; i < BIT_SIZE; i++){
             std::vector<int> row = std::vector<int>(20);
             waypointIds[i] = row;
         }
     }
     
     void reset(){
-        for (int i=0; i < TOTAL_DISTANCE; i++){
+        for (int i=0; i < BIT_SIZE; i++){
             distanceHist[i] = 0;
             waypointIds[i].clear();
         }
@@ -502,13 +511,13 @@ public:
         int rankCount = 0;
         int correctIdIndex = 0;
         
-            for(int i=0; i< TOTAL_DISTANCE; i++){
+            for(int i=0; i< BIT_SIZE; i++){
                 rankCount = distanceHist[i] + rankCount;
                 for(int j=0; j <= maxDistanceFrequency; j++){
                 if (waypointIds[i].size() > j){
                     if (waypointIds[i].at(j) == correctId){
                         correctIdIndex = i;
-                        i = TOTAL_DISTANCE;
+                        i = BIT_SIZE;
                         j = maxDistanceFrequency;
                     }
                 }
@@ -564,14 +573,14 @@ public:
 // ---------------------- //
 class CorruptPath {
 public:
-    std::bitset<(BRD_LEN*BSDLEN + BRD_LEN)> corruptPath;
+    std::bitset<(BIT_SIZE)> corruptPath;
     std::vector<int> waypointIds;
     DistanceStats distanceStats = DistanceStats();
     bool isCorrupted;
     CorruptPath(){
         isCorrupted = false;
     }
-    void setPath(std::bitset<(BRD_LEN*BSDLEN + BRD_LEN)> path, int correctId){
+    void setPath(std::bitset<(BIT_SIZE)> path, int correctId){
         distanceStats.setId(correctId);
         corruptPath = path;
         corrupt25();
@@ -582,7 +591,7 @@ public:
         // and it will only corrupt the y's and skip over the x's
         int turnBitCount = 0;
         // loop over bits and flip 25% of the time (for total accuracy of 75%)
-        for (int i = (BRD_LEN*BSDLEN + BRD_LEN)-1; i >= 0; i--){ // not in reverse, but for binary, 0 starst on far right
+        for (int i = (BIT_SIZE)-1; i >= 0; i--){ // not in reverse, but for binary, 0 starst on far right
             // flips bit 25% of the time, but leaves turn bits as is
             if ( turnBitCount != 0 ){  // skips turn bits TODO - should these also be corrupted? accuracy of compass?
                 if (flip25()){
@@ -590,11 +599,11 @@ public:
                 }
             }
             turnBitCount++;
-            turnBitCount = turnBitCount % (BSDLEN+1);
+            turnBitCount = turnBitCount % (BSD_PLUS_EXTRA);
         }
         isCorrupted = true;
     }
-    void hamming(std::bitset<(BRD_LEN*BSDLEN + BRD_LEN)> path, int id){
+    void hamming(std::bitset<(BIT_SIZE)> path, int id){
         // find hamming distance between corrupt path and input path, and store to DistanceStats
         int distance = 0;
         // compute hamming distance - loop over bits, and add 1 to distance for every different bit
@@ -706,17 +715,19 @@ public:
     void buildPath(std::string path, std::vector<int> waypointIds, Waypoint w, Vector2d prevPos, double prevRot){
         w.visited = true;
         // access w.pos for current position
-        float heading = 0;
-        
         // calculate heading for each new waypoint, and add w.bsd here in correct rotation
-        heading = calculateHeading(prevPos, w.pos); // (prevPos, nextPos)
+        float heading = calculateHeading(prevPos, w.pos); // (prevPos, nextPos)
         
         // add turn bit -- added BEFORE w BSD, since turn determined w/ prevPos to this wp
+        // 2 bits (00=no turn, 10=left, 01=right, 11=not used)
         std::string turnBit = determineTurnBit(prevRot, w.rot);
         
+        // rotate turnBit if needed (left --> right, etc)
         if (DIRECTED){
             path = path + turnBit + w.bsd;
-        } else { // apply rotation as needed
+        } else {
+            //path = path + rotateTurn(turnBit, w.rot, heading) + rotateWaypoint(w, heading);
+            // don't need to rotate turn bits, because calculation handles that already
             path = path + turnBit + rotateWaypoint(w, heading);
         }
         
@@ -724,7 +735,7 @@ public:
         waypointIds.push_back(w.id);
         
         // check for connections if path length not reached yet
-        if (path.length() < len * BSDLEN + BRD_LEN){
+        if (path.length() < BIT_SIZE){
             // check every connection
             for(int i = 0; i < w.conns.size(); i++){
                 // if connection has not been visited yet, visit it
@@ -737,10 +748,17 @@ public:
         }
         
         // path has reached limit add to tree if long enough
-        if (path.length() == len * BSDLEN + BRD_LEN){
+        if (path.length() == BIT_SIZE){
             // convert string to bit
-            std::bitset<(BRD_LEN*BSDLEN + BRD_LEN)> brd(path); // account for addition of turnBits (BRD_LEN-1)
+            std::bitset<(BIT_SIZE)> brd(path); // account for addition of turnBits (BRD_LEN-1)
             btree.addBrd(brd, waypointIds);
+            
+            // TESTING
+            std::cout<<"\nPATH ADDED:";
+            std::cout<<"\n"<<brd<<std::endl;
+            for(int i=0; i < waypointIds.size(); i++){
+                std::cout<<"   "<<waypointIds.at(i);
+            } std::cout<<std::endl;
         }
     }
     
@@ -758,18 +776,20 @@ public:
     
     std::string determineTurnBit(double prevRot, double currRot){
         // determines if a turn of greater than 20 degrees in either L/R has occurred
-        // turn = 1, no turn = 0
+        // 00=no turn, 01=right turn, 10=left turn
         // to be added to BSD after rotation has been completed
-        
-        // ACTUALLY I need to compare PREVIOUS heading to NEW HEADING (duh)
-        
-        std::string turnBit = "1";
+        // compare PREVIOUS heading to NEW HEADING
+        std::string turnBit = "00";
         prevRot = constrain(prevRot);
         currRot = constrain(currRot);
-        double temp = abs(prevRot - currRot);
-        if ( (temp < 45) && (temp > -45) ){
-            // no turn
-            turnBit = "0";
+        double temp = currRot - prevRot;
+        // temp = constrain(temp);
+        if ( ((temp <= 180) && (temp > 45)) || ((temp < -180) && (temp > -315)) ){ // TODO correct?
+            // left turn
+            turnBit = "10";
+        } else if ( ((temp > 180) && (temp < 315)) || (temp < 0 && temp > -180) ){
+            // right turn
+            turnBit = "01";
         }
         return turnBit;
     }
@@ -784,11 +804,40 @@ public:
         return heading;
     }
     
+    bool hasRotation(double rot, double heading){
+        // if true, switch is needed
+        double temp = rot + heading;
+        if ( (temp > 90 + rot) && (temp < 270 + rot) ){
+            return true;
+        }
+        return false;
+    }
+    
+    /*
+    std::string rotateTurn(std::string turnBit, double rot, double heading){
+        if (hasRotation(rot, heading)){
+            return switchTurn(turnBit);
+        }
+        return turnBit;
+    }
+    
+    std::string switchTurn(std::string turnBit){
+        std::string newTurnBit = "";
+        // TESTING
+        std::cout<<"---switchTURNBit---";
+        if (turnBit.size() == 2){
+            newTurnBit = turnBit[1];
+            newTurnBit = newTurnBit + turnBit[0];
+        } else {
+            std::cout<<"\nPATH ERROR: turn bit is not expected length";
+        }
+        return newTurnBit;
+    } */
+    
     std::string rotateWaypoint(Waypoint w, double heading){
         // if (nextWpHeading + heading is between (0 & 90) || (270 & 360) keep same BSD
         // else, switch (mirror) bsd (when between 91 * 269) switch <-- do this version
-        double temp = w.rot + heading;
-        if ( (temp > 90 + w.rot) && (temp < 270 + w.rot) ){ // + w.rot accounts for w.rot that is not 0
+        if ( hasRotation(constrain(w.rot), constrain(heading)) ){ // + w.rot accounts for w.rot that is not 0
             //switch
             return switchBsd(w.bsd);
         }
@@ -796,14 +845,15 @@ public:
     }
     
     std::string switchBsd(std::string bsd){
+        // TESTING
+        std::cout<<"---bsd rotating---";
+        std::string newBsd = "";
         if (BSDLEN == 2){
-            std::string newBsd = "";
             newBsd = bsd[1];
             newBsd = newBsd + bsd[0];
             return newBsd;
         } else if (BSDLEN == 6){ //TODO do this with bits, then convert to string it would be faster
             // assumes FB - L(d/w) - R(d/w)
-            std::string newBsd = "";
             newBsd = bsd[1];
             newBsd = newBsd + bsd[0];
             newBsd = newBsd + bsd[4];
@@ -813,7 +863,6 @@ public:
             return newBsd;
         } else if (BSDLEN == 4){
             // assumes FB LR
-            std::string newBsd = "";
             newBsd = bsd[1];
             newBsd = newBsd + bsd[0];
             newBsd = newBsd + bsd[3];
@@ -824,7 +873,7 @@ public:
         return bsd;
     }
     
-    void corruptPath(std::bitset<(BRD_LEN*BSDLEN + BRD_LEN)> pathToCorrupt, int correctId){
+    void corruptPath(std::bitset<(BIT_SIZE)> pathToCorrupt, int correctId){
         //std::cout<<"uncorrupted:"<<pathToCorrupt<<std::endl;
         cPath.setPath(pathToCorrupt, correctId);
         //cPath.printPath();
@@ -930,7 +979,7 @@ int main(int argc, const char * argv[]) {
         // to start, I'll just pick a path
     
     // TODO LOOP OVER THIS X TIMES
-    for(int i=0; i < 1000; i++){
+    for(int i=0; i < 1; i++){
         p.distanceAllPaths();
         //p.printStats();
     }
