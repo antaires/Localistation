@@ -25,20 +25,20 @@
 #include <map> // for storing unique BRDs and counting how often they occur
 
 // adding to new github
-#define BRD_LEN 6 // number of waypoints in BRD
-#define TOTAL_WAYPOINTS 6 // total number of waypoints entered in text file
+#define BRD_LEN 40 // number of waypoints in BRD
+#define TOTAL_WAYPOINTS 284 // total number of waypoints entered in text file
 #define MAXLINELEN 100 // maximum length of waypoint data for total waypoints < 1000 (000 00 heading x y 000 000 000....?)
-#define BSDLEN 2 // number of bits in a BSD
-//#define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/data/undirected/doors_walls_FBLR/distance2/data_distance2_284_FBLR.txt"
+#define BSDLEN 4 // number of bits in a BSD
+#define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/data/undirected/doors_walls_FBLR/distance2/data_distance2_284_FBLR.txt"
 //test datafile
-#define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/testData4.txt"
+//#define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/testData4.txt"
 #define OUTPUT "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/histogram_output/output.txt"
 // distance stats
 #define LOWER_RANGE 0
-#define UPPER_RANGE 20
+#define UPPER_RANGE 10
 #define RANK_STATS_SIZE 11
 // don't change
-#define TOTAL_DISTANCE BRD_LEN*BSDLEN // largest distance that will be counted - needn't be larger than pathlength
+#define TOTAL_DISTANCE BRD_LEN*BSDLEN + BRD_LEN// largest distance that will be counted - needn't be larger than pathlength
 #define DIRECTED false
 #define STATS_ARR_LEN 102
 #define ARRLEN TOTAL_WAYPOINTS + 1 // length of waypoint arr (total num of waypoints + 1) - each waypoint stored as its id
@@ -147,16 +147,6 @@ public:
         //resetToRoot();
         current = &root;
         
-        // TESTING
-        std::cout<<"\nBTREE -- addBrd():"<<std::endl;;
-        std::cout<<"brd: "<<brd;
-        // print waypoints
-        std::cout<<"\nwps:   ";
-        for(int i=0; i < waypointIds.size(); i++){
-            std::cout<<waypointIds.at(i)<<"  ";
-        } std::cout<<std::endl;
-        
-        
         // for each bit:
         // TODO change to (BRD_LEN*BSDLEN + BRD_LEN)
         for (int i = (BRD_LEN*BSDLEN + BRD_LEN)-1; i >= 0; i--){ // not in reverse, but for binary, 0 starts on far right
@@ -211,16 +201,15 @@ public:
     
     // go through each path of tree, build BRD, print waypoint ids vector, print count
     void print(){
-        std::cout<<"\nPRINTING TREE: " << std::endl;
-        std::string p = "";
-        std::string tp = "";
-        printTree(&root, p, tp, BRD_LEN*BSDLEN + BRD_LEN);
-        printStats();
-        std::cout<<"\nPRINTING TEST TREE: " << std::endl;
-        printTestTree(&root);
+        //std::cout<<"\nPRINTING TREE: " << std::endl;
+        //std::string p = "";
+        //printTree(&root, p, BRD_LEN*BSDLEN + BRD_LEN);
+        //printStats();
+        //std::cout<<"\nPRINTING TEST TREE: " << std::endl;
+        //printTestTree(&root);
     }
     
-    void printTree(Node* n, std::string p, std::string tp, int cnt){
+    void printTree(Node* n, std::string p, int cnt){
         
         /* NOT WORKING
          // this causes std::cout to write to OUTPUT file rather than terminal
@@ -259,8 +248,6 @@ public:
             //    std::cout<<"\u25A0";
             //}
             
-            std::cout <<"\nturn: "<< tp;
-            
             std::cout<<std::endl;
             // update stats info
             if (n->count <= 100){
@@ -271,10 +258,10 @@ public:
             
         } else {
             if (n->left != NULL) {
-                printTree(n->left, p, tp, cnt);
+                printTree(n->left, p, cnt);
             }
             if (n->right != NULL) {
-                printTree(n->right, p, tp, cnt);
+                printTree(n->right, p, cnt);
             }
         }
         
@@ -485,7 +472,8 @@ public:
     DistanceStats(){
         // initialize array of vectors
         for (int i=0; i < TOTAL_DISTANCE; i++){
-            waypointIds[i] = std::vector<int>();
+            std::vector<int> row = std::vector<int>(20);
+            waypointIds[i] = row;
         }
     }
     
@@ -526,8 +514,8 @@ public:
                 }
             }
         }
-        std::cout<<"correctIdIndex: "<<correctIdIndex;
-        std::cout<<"\nrank:       : "<<rankCount<<std::endl;
+        //std::cout<<"correctIdIndex: "<<correctIdIndex;
+        //std::cout<<"\nrank:       : "<<rankCount<<std::endl;
         rank = rankCount;
     }
     
@@ -557,7 +545,7 @@ public:
         for(int j=0; j <= maxDistanceFrequency; j++){ // TODO: < or <=
             for(int i=LOWER_RANGE; i< UPPER_RANGE; i++){
                 // draw waypoint id or if none, draw 3 spaces
-                if (waypointIds[i].size() > j){
+                if (!waypointIds[i].empty() && waypointIds[i].size() > j){
                     if (waypointIds[i].at(j) == correctId){
                         std::cout<<"*!!!*";
                     } else {
@@ -589,16 +577,20 @@ public:
         corrupt25();
     }
     void corrupt25(){
+        // ASSUMES TURN BIT OCCURS AS FIRST BIT OF BSD
+        // so for a 2 bit BSD, it would be: turnbit=x, bsd=yy: xyyxyyxyyxyy
+        // and it will only corrupt the y's and skip over the x's
         int turnBitCount = 0;
         // loop over bits and flip 25% of the time (for total accuracy of 75%)
         for (int i = (BRD_LEN*BSDLEN + BRD_LEN)-1; i >= 0; i--){ // not in reverse, but for binary, 0 starst on far right
-            // flips bit 25% of the time
-            if (!(turnBitCount % BSDLEN == 0) ){  // skips turn bits TODO - should these also be corrupted? accuracy of compass?
+            // flips bit 25% of the time, but leaves turn bits as is
+            if ( turnBitCount != 0 ){  // skips turn bits TODO - should these also be corrupted? accuracy of compass?
                 if (flip25()){
                     corruptPath[i] = !corruptPath[i];
                 }
             }
             turnBitCount++;
+            turnBitCount = turnBitCount % (BSDLEN+1);
         }
         isCorrupted = true;
     }
@@ -833,9 +825,9 @@ public:
     }
     
     void corruptPath(std::bitset<(BRD_LEN*BSDLEN + BRD_LEN)> pathToCorrupt, int correctId){
-        std::cout<<"uncorrupted:"<<pathToCorrupt<<std::endl;
+        //std::cout<<"uncorrupted:"<<pathToCorrupt<<std::endl;
         cPath.setPath(pathToCorrupt, correctId);
-        cPath.printPath();
+        //cPath.printPath();
     }
     
     void distanceAllPaths(){
@@ -938,11 +930,11 @@ int main(int argc, const char * argv[]) {
         // to start, I'll just pick a path
     
     // TODO LOOP OVER THIS X TIMES
-    //for(int i=0; i < 1; i++){
-    //    p.distanceAllPaths();
-    //    p.printStats();
-    //}
-    //p.printRankStats();
+    for(int i=0; i < 1000; i++){
+        p.distanceAllPaths();
+        //p.printStats();
+    }
+    p.printRankStats();
     // TODO Print total rank stats
     
     return 0;
