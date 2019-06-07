@@ -25,7 +25,7 @@
 #include <map> // for storing unique BRDs and counting how often they occur
 
 // adding to new github
-#define BRD_LEN 3 // number of waypoints in BRD
+#define BRD_LEN 4 // number of waypoints in BRD
 #define TOTAL_WAYPOINTS 7 // total number of waypoints entered in text file
 #define MAXLINELEN 100 // maximum length of waypoint data for total waypoints < 1000 (000 00 heading x y 000 000 000....?)
 #define BSDLEN 2 // number of bits in a BSD
@@ -361,6 +361,7 @@ public:
     void print() {
         std::cout << "\nwaypoint id: " << id << std::endl;
         std::cout << "waypoint BSD: " << bsd << std::endl;
+        std::cout << "conns: ";
         for (int i = 0; i < conns.size(); i++){
             std::cout << conns[i] << " ";
         }
@@ -728,7 +729,7 @@ public:
         } else {
             //path = path + rotateTurn(turnBit, w.rot, heading) + rotateWaypoint(w, heading);
             // don't need to rotate turn bits, because calculation handles that already
-            path = path + turnBit + rotateWaypoint(w, heading);
+            path = path + rotateTurn(turnBit, w.rot, heading) + rotateWaypoint(w, heading);
         }
         
         // add waypointId to vector of ids
@@ -738,11 +739,15 @@ public:
         if (path.length() < BIT_SIZE){
             // check every connection
             for(int i = 0; i < w.conns.size(); i++){
+                std::cout<<"\nwpid: "<<w.id<<" visiting conn "<<i<<"\n";
                 // if connection has not been visited yet, visit it
                 if (!(wa.waypointArray[w.conns[i]].visited)){
                     // need to pass in previous position to calculate heading
+                    
                     wa.waypointArray[w.conns[i]].visited = true; // prevent loops
+                    
                     buildPath(path, waypointIds, wa.waypointArray[w.conns[i]], w.pos, w.rot); // recursive call to continue building path
+                    wa.waypointArray[w.conns[i]].visited = false; // allows all connections to be attempted (1 connection may lead to multiple possible paths)
                 }
             }
         }
@@ -807,13 +812,13 @@ public:
     bool hasRotation(double rot, double heading){
         // if true, switch is needed
         double temp = rot + heading;
+        //temp = constrain(temp);
         if ( (temp > 90 + rot) && (temp < 270 + rot) ){
             return true;
         }
         return false;
     }
     
-    /*
     std::string rotateTurn(std::string turnBit, double rot, double heading){
         if (hasRotation(rot, heading)){
             return switchTurn(turnBit);
@@ -832,13 +837,15 @@ public:
             std::cout<<"\nPATH ERROR: turn bit is not expected length";
         }
         return newTurnBit;
-    } */
+    }
     
     std::string rotateWaypoint(Waypoint w, double heading){
         // if (nextWpHeading + heading is between (0 & 90) || (270 & 360) keep same BSD
         // else, switch (mirror) bsd (when between 91 * 269) switch <-- do this version
-        if ( hasRotation(constrain(w.rot), constrain(heading)) ){ // + w.rot accounts for w.rot that is not 0
-            //switch
+        double temp = w.rot + heading;
+            temp = abs(temp);
+            temp = constrain(temp);
+        if ( (temp > 90) && (temp < 270) ){
             return switchBsd(w.bsd);
         }
         return w.bsd;
@@ -869,7 +876,7 @@ public:
             newBsd = newBsd + bsd[2];
             return newBsd;
         }
-        std::cout<<"POTENTIAL ERROR: CHECK switchBsd() for correct BSD length"<<std::endl;
+        std::cout<<"ERROR: CHECK switchBsd() for correct BSD length"<<std::endl;
         return bsd;
     }
     
