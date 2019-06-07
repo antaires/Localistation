@@ -729,7 +729,7 @@ public:
         } else {
             //path = path + rotateTurn(turnBit, w.rot, heading) + rotateWaypoint(w, heading);
             // don't need to rotate turn bits, because calculation handles that already
-            path = path + rotateTurn(turnBit, w.rot, heading) + rotateWaypoint(w, heading);
+            path = path + turnBit + rotateWaypoint(w, heading);
         }
         
         // add waypointId to vector of ids
@@ -739,7 +739,6 @@ public:
         if (path.length() < BIT_SIZE){
             // check every connection
             for(int i = 0; i < w.conns.size(); i++){
-                std::cout<<"\nwpid: "<<w.id<<" visiting conn "<<i<<"\n";
                 // if connection has not been visited yet, visit it
                 if (!(wa.waypointArray[w.conns[i]].visited)){
                     // need to pass in previous position to calculate heading
@@ -768,6 +767,22 @@ public:
     }
     
     float calculateHeading(Vector2d prevPos, Vector2d nextPos){
+        Vector2d square = Vector2d();
+        square.x = (nextPos.x - prevPos.x);
+        square.y = (nextPos.y - prevPos.y);
+        double heading = atan2(square.y, square.x);
+        // convert to degrees
+        heading = (heading * M_PI) * 360.0 / (2.0 * M_PI);
+        
+        // was rotating opposite way than calculations expected,
+        // so instead of 90 it was returning 282 (270)
+        // and rather than 270 it was returning -287
+        if (heading > 0){
+            heading = heading - 360;
+        } else {
+            heading = heading + 360;
+        }
+        /* OLD VERSION
         float x1 = prevPos.x;
         float y1 = prevPos.y;
         float x2 = nextPos.x;
@@ -777,6 +792,11 @@ public:
         // convert to degrees
         float theta_degrees = (theta_radians * M_PI) * 360.0 / (2.0 * M_PI);
         return theta_degrees;
+         */
+        std::cout<<"\nP1("<<prevPos.x<<","<<prevPos.y<<")";
+        std::cout<<"\nP2("<<nextPos.x<<","<<nextPos.y<<")";
+        std::cout<<"\nheading: "<<heading;
+        return heading;
     }
     
     std::string determineTurnBit(double prevRot, double currRot){
@@ -819,6 +839,7 @@ public:
         return false;
     }
     
+    /* TURN BIT ROTATION TURNED OFF
     std::string rotateTurn(std::string turnBit, double rot, double heading){
         if (hasRotation(rot, heading)){
             return switchTurn(turnBit);
@@ -837,18 +858,30 @@ public:
             std::cout<<"\nPATH ERROR: turn bit is not expected length";
         }
         return newTurnBit;
-    }
+    }*/
     
     std::string rotateWaypoint(Waypoint w, double heading){
         // if (nextWpHeading + heading is between (0 & 90) || (270 & 360) keep same BSD
         // else, switch (mirror) bsd (when between 91 * 269) switch <-- do this version
+        
+        // if heading is 180 degrees diff from rot, then switch bsd
+        double diff = abs(w.rot - heading);
+        std::cout<<"\nr:"<<w.rot<<" h:"<<heading;
+        diff = constrain(diff);
+        std::cout<<"\ndiff: "<<diff;
+        if ( diff < 180 && diff > 0){
+            return w.bsd;
+        }
+        
+        /* OLD METHOD
         double temp = w.rot + heading;
             temp = abs(temp);
             temp = constrain(temp);
         if ( (temp > 90) && (temp < 270) ){
             return switchBsd(w.bsd);
-        }
-        return w.bsd;
+         } return w.bsd;
+         */
+        return switchBsd(w.bsd);
     }
     
     std::string switchBsd(std::string bsd){
