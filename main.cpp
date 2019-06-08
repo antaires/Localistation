@@ -707,21 +707,32 @@ public:
         for (int i = 1; i < ARRLEN; i++){
             std::vector<int> waypointIds; // to track waypoint id's along path
             wa.waypointArray[i].visited = true;
-            buildPath(path, waypointIds, wa.waypointArray[i], wa.waypointArray[i].pos, wa.waypointArray[i].rot); // build all paths starting at each waypoint in turn
+            buildPath(path, waypointIds, wa.waypointArray[i], wa.waypointArray[i].pos, wa.waypointArray[i].rot, wa.waypointArray[i].rot); // build all paths starting at each waypoint in turn (starting 'prev rot' is just 0)
             wa.unvisitAll(); // clear "visited" bool to start next path
         }
         btree.print();
     }
     
-    void buildPath(std::string path, std::vector<int> waypointIds, Waypoint w, Vector2d prevPos, double prevRot){
+    void buildPath(std::string path, std::vector<int> waypointIds, Waypoint w, Vector2d prevPos, double prevRot, double prevHeading){
         w.visited = true;
         // access w.pos for current position
         // calculate heading for each new waypoint, and add w.bsd here in correct rotation
-        float heading = calculateHeading(prevPos, w.pos); // (prevPos, nextPos)
+        double heading;
+        if (path == ""){ // for 1st wp in path, heading is its own rotation
+            heading = w.rot;
+        } else {
+            heading = calculateHeading(prevPos, w.pos); // (prevPos, nextPos)
+        }
         
         // add turn bit -- added BEFORE w BSD, since turn determined w/ prevPos to this wp
         // 2 bits (00=no turn, 10=left, 01=right, 11=not used)
-        std::string turnBit = determineTurnBit(prevRot, w.rot);
+        std::string turnBit;
+        if (path.size() <= BSDLEN + 2){
+            turnBit = "00"; // no turns for first 2 waypoints, as it will always be a straight line
+        } else {
+            //std::string turnBit = determineTurnBit(prevRot, w.rot);
+            turnBit = determineTurnBit2(prevHeading, heading);
+        }
         
         // rotate turnBit if needed (left --> right, etc)
         if (DIRECTED){
@@ -745,7 +756,8 @@ public:
                     
                     wa.waypointArray[w.conns[i]].visited = true; // prevent loops
                     
-                    buildPath(path, waypointIds, wa.waypointArray[w.conns[i]], w.pos, w.rot); // recursive call to continue building path
+                    // path, waypointIds, w, prevPos, prevRot, prevHeading)
+                    buildPath(path, waypointIds, wa.waypointArray[w.conns[i]], w.pos, w.rot, heading); // recursive call to continue building path
                     wa.waypointArray[w.conns[i]].visited = false; // allows all connections to be attempted (1 connection may lead to multiple possible paths)
                 }
             }
@@ -763,6 +775,89 @@ public:
             for(int i=0; i < waypointIds.size(); i++){
                 std::cout<<"   "<<waypointIds.at(i);
             } std::cout<<std::endl;
+            
+            // TESTING
+            testData5(path, waypointIds);
+        }
+    }
+    
+    void testData5(std::string path, std::vector<int> waypointIds){
+        // convert waypoint ids to a string
+        std::string ids = "";
+        for(int i=0; i < waypointIds.size(); i++){
+            ids = ids + std::to_string(waypointIds.at(i));
+        }
+        
+        // check all paths
+        // 1s
+        if ( ids == "1234" ){
+            assert( path == "0000000100100111");
+        } else if ( ids == "1275" ){
+            assert( path == "0000000101110001");
+        } else if ( ids == "1657"){
+            assert( path == "0000000010101011");
+        } else if ( ids == "1654"){
+            assert( path == "0000000010100011");
+        }
+        // 2s
+        else if( ids == "2345" ){
+            assert( path == "0001001001110101" );
+        } else if ( ids == "2754" ){
+            assert( path == "0001001100011011" );
+        } else if ( ids == "2756" ){
+            assert( path == "0001001100010100" );
+        } else if ( ids == "2165" ){
+            assert( path == "0001000010001010" );
+        }
+        // 3s
+        else if( ids == "3457" ){
+            assert( path == "0010001101010111" );
+        } else if ( ids == "3456" ){
+            assert( path == "0010001101010000");
+        } else if ( ids == "3216" ){
+            assert( path == "0010001000001000");
+        } else if ( ids == "3275" ){
+            assert( path == "0010001010110001");
+        }
+        // 4s
+        else if( ids == "4572" ){
+            assert( path == "0011000101110001" );
+        } else if ( ids == "4561" ){
+            assert( path == "0011000100000100");
+        } else if ( ids == "4327" ){
+            assert( path == "0011000110101011");
+        } else if ( ids == "4321" ){
+            assert( path == "0011000110100000");
+        }
+        // 5s
+        else if( ids == "5612" ){
+            assert( path == "0001000001000101" );
+        } else if ( ids == "5721" ){
+            assert( path == "0001001100011000"); // change if adding retro-active rotation
+        } else if ( ids == "5723" ){
+            assert( path == "0001001100010110");
+        } else if ( ids == "5432" ){
+            assert( path == "0001001110011010");
+        }
+        // 6s
+        else if ( ids == "6572" ){
+            assert( path == "0000001010110001" ); // rotate 2 if adding retr-active rotation
+        } else if ( ids == "6543" ){
+            assert( path == "0000001000111001");
+        } else if ( ids == "6127" ){
+            assert( path == "0000000001010111");
+        } else if ( ids == "6123" ){
+            assert( path == "0000000001010010");
+        }
+        // 7s
+        else if ( ids == "7561" ){
+            assert( path == "0011000101000100" ); // rotate 2 if adding retr-active rotation
+        } else if ( ids == "7543" ){
+            assert( path == "0011000110111001" ); // rotate 2 if adding retr-active rotation
+        } else if ( ids == "7216" ){
+            assert( path == "0011000110001000"); // rotate 2 if adding retr-active rotation
+        } else if ( ids == "7234" ){
+            assert( path == "0011000101100111"); 
         }
     }
     
@@ -774,14 +869,24 @@ public:
         // convert to degrees
         heading = (heading * M_PI) * 360.0 / (2.0 * M_PI);
         
+        std::cout<<"\nP1("<<prevPos.x<<","<<prevPos.y<<")";
+        std::cout<<"\nP2("<<nextPos.x<<","<<nextPos.y<<")";
+
         // was rotating opposite way than calculations expected,
         // so instead of 90 it was returning 282 (270)
         // and rather than 270 it was returning -287
-        if (heading > 0){
-            heading = heading - 360;
+        std::cout<<"\nHEADING pre adjust: "<<heading;
+        if (heading == 0){
+        } else if (heading < 0){
+            heading = abs(heading);
+        } else if (heading > 0 && heading < 360){
+            heading = heading -180;
         } else {
-            heading = heading + 360;
+            heading = heading - 360;
         }
+        std::cout<<"\nHEADING post adjust: "<<heading;
+         
+         
         /* OLD VERSION
         float x1 = prevPos.x;
         float y1 = prevPos.y;
@@ -793,10 +898,67 @@ public:
         float theta_degrees = (theta_radians * M_PI) * 360.0 / (2.0 * M_PI);
         return theta_degrees;
          */
-        std::cout<<"\nP1("<<prevPos.x<<","<<prevPos.y<<")";
-        std::cout<<"\nP2("<<nextPos.x<<","<<nextPos.y<<")";
         std::cout<<"\nheading: "<<heading;
         return heading;
+    }
+    
+    std::string determineTurnBit2(double prevHeading, double heading){
+        double h1 = prevHeading;
+        double h2 = heading;
+        
+        // constrain
+        h1 = constrain(h1);
+        h2 = constrain(h2);
+        
+        double diff = h2 - h1;
+        if (diff < 0){
+            diff += 360;
+        } else if (diff >= 360){
+            diff -= 360;
+        }
+        
+        std::cout<<"\nDetermine turn bit 2: ";
+        std::cout<<"\nprevHeading: "<<prevHeading<<" h1:"<<h1;
+        std::cout<<"\ncurrHeading: "<<heading<<" h2:"<<h2;
+        std::cout<<"\ndiff: "<<diff;
+        
+        if (diff > 225 && diff < 315){
+            // right turn
+            return "01";
+        } else if (diff > 45 && diff < 135){
+            // left turn
+            return "10";
+        }
+        return "00";
+        
+        /*
+        // skip if one value 0
+        double diff;
+        if (h1 == 0 || h2 == 0){
+            diff = h1 - h2;
+        } else {
+            diff = fmod(h1, h2);
+            //if (diff < -180){
+            //    diff += 360;
+            // }
+            //if (diff >= 180){
+            //    diff -= 360;
+            // }
+        }
+    
+        
+        // left
+        if ( (diff < 135 && diff > 45) || (diff < -225 && diff > -315) ){
+            return "10";
+        }
+        
+        // right
+        if ( (diff < 315 && diff > 225) || (diff < -45 && diff > -135) ){
+            return "01";
+        }
+        
+        return turnBit;
+         */
     }
     
     std::string determineTurnBit(double prevRot, double currRot){
@@ -808,6 +970,7 @@ public:
         prevRot = constrain(prevRot);
         currRot = constrain(currRot);
         double temp = currRot - prevRot;
+        
         // temp = constrain(temp);
         if ( ((temp <= 180) && (temp > 45)) || ((temp < -180) && (temp > -315)) ){ // TODO correct?
             // left turn
@@ -816,6 +979,10 @@ public:
             // right turn
             turnBit = "01";
         }
+        
+        // TESTING
+        std::cout<<"\ndetermineTurnBit-- preRot:"<<prevRot<<" currRot:"<<currRot<<" turnB: "<<turnBit;
+        
         return turnBit;
     }
     
@@ -823,7 +990,7 @@ public:
         while(heading < 0){
             heading+=360;
         }
-        while (heading > 360){
+        while (heading >= 360){
             heading-=360;
         }
         return heading;
@@ -833,18 +1000,33 @@ public:
         // if true, switch is needed
         double temp = rot + heading;
         //temp = constrain(temp);
-        if ( (temp > 90 + rot) && (temp < 270 + rot) ){
+        if ( (temp > 90) && (temp < 270) ){
             return true;
         }
         return false;
     }
     
-    /* TURN BIT ROTATION TURNED OFF
+    /*
     std::string rotateTurn(std::string turnBit, double rot, double heading){
-        if (hasRotation(rot, heading)){
-            return switchTurn(turnBit);
-        }
+        
+        std::cout<<"\nrotateTurn-- heading:"<<heading<<" rot:"<<rot;
+        
         return turnBit;
+        
+         V2
+        double diff = abs(rot - heading);
+        //diff = constrain(diff);
+        std::cout<<"\nrotateTurn-- diff: "<<diff;
+        if ( diff < 225 && diff > 135){
+            return switchTurn(turnBit);
+        } return turnBit;
+     
+
+        //V1
+        //if (hasRotation(rot, heading)){
+        //    return switchTurn(turnBit);
+        //}
+        //return turnBit;
     }
     
     std::string switchTurn(std::string turnBit){
@@ -863,17 +1045,58 @@ public:
     std::string rotateWaypoint(Waypoint w, double heading){
         // if (nextWpHeading + heading is between (0 & 90) || (270 & 360) keep same BSD
         // else, switch (mirror) bsd (when between 91 * 269) switch <-- do this version
+        double rot = w.rot;
+        double h = heading;
         
+        while (rot < -180){
+            rot+=360;
+        }
+        while (rot > 180){
+            rot-=360;
+        }
+        while (h < -180){
+            h += 360;
+        }
+        while (h > 180){
+            h -= 360;
+        }
+        
+        // accepts input -180 to 180 range
+        std::cout<<"\nrotateWaypoint()-- rot:"<<rot<<" h:"<<h;
+        
+        // skip if one value 0
+        double diff;
+        if (rot == 0 || h == 0){
+            diff = abs(rot - h);
+        } else {
+            //diff = fmod(rot, h); WORKING UP TO 5s
+            diff = abs(rot - h);
+            if (diff < -360){
+                diff += 360;
+            }
+            if (diff >= 360){
+                diff -= 360;
+            }
+        }
+        std::cout<<" diff: "<<diff;
+        if (diff > (90+45) && diff < (180+45)){
+            return switchBsd(w.bsd);
+        }
+        return w.bsd;
+        
+        /* V2
         // if heading is 180 degrees diff from rot, then switch bsd
         double diff = abs(w.rot - heading);
         std::cout<<"\nr:"<<w.rot<<" h:"<<heading;
         diff = constrain(diff);
         std::cout<<"\ndiff: "<<diff;
-        if ( diff < 180 && diff > 0){
+        if ( diff < 180 && diff >= 0){
             return w.bsd;
-        }
+        } return switchBsd(w.bsd);
+        */
+
         
-        /* OLD METHOD
+        /* OLD METHOD V1
         double temp = w.rot + heading;
             temp = abs(temp);
             temp = constrain(temp);
@@ -881,7 +1104,6 @@ public:
             return switchBsd(w.bsd);
          } return w.bsd;
          */
-        return switchBsd(w.bsd);
     }
     
     std::string switchBsd(std::string bsd){
