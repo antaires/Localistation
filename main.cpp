@@ -32,7 +32,10 @@
 //#define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/data/undirected/doors_walls_FBLR/distance2/data_distance2_284_FBLR.txt"
 //test datafile
 #define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/testData5.txt"
+#define TESTDATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/testData5.txt"
 #define OUTPUT "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/histogram_output/output.txt"
+// test mode
+#define TEST_MODE_ACTIVE true
 // distance stats
 #define LOWER_RANGE 0
 #define UPPER_RANGE 10
@@ -46,7 +49,7 @@
 
 // don't change
 #define BSD_PLUS_EXTRA BSDLEN+EXTRA_BITS
-#define BIT_SIZE BRD_LEN*BSDLEN + (BRD_LEN*EXTRA_BITS) // turn (2 bits - L/R)
+#define BIT_SIZE BRD_LEN*(BSDLEN + EXTRA_BITS) // turn (2 bits - L/R)
 
 // don't change
 #define DIRECTED false
@@ -587,14 +590,16 @@ public:
         corrupt25();
     }
     void corrupt25(){
-        // ASSUMES TURN BIT OCCURS AS FIRST BIT OF BSD
+        //std::cout<<"\nCORRUPT: ";
+        //std::cout<<"\npath:"<<corruptPath;
+        // ASSUMES TURN BIT(s) OCCURS AS FIRST BIT OF BSD
         // so for a 2 bit BSD, it would be: turnbit=x, bsd=yy: xyyxyyxyyxyy
         // and it will only corrupt the y's and skip over the x's
         int turnBitCount = 0;
         // loop over bits and flip 25% of the time (for total accuracy of 75%)
         for (int i = (BIT_SIZE)-1; i >= 0; i--){ // not in reverse, but for binary, 0 starst on far right
             // flips bit 25% of the time, but leaves turn bits as is
-            if ( turnBitCount != 0 ){  // skips turn bits TODO - should these also be corrupted? accuracy of compass?
+            if ( (turnBitCount != 0) && (turnBitCount != 1) ){  // skips turn bits TODO - should these also be corrupted? accuracy of compass?
                 if (flip25()){
                     corruptPath[i] = !corruptPath[i];
                 }
@@ -602,6 +607,7 @@ public:
             turnBitCount++;
             turnBitCount = turnBitCount % (BSD_PLUS_EXTRA);
         }
+        //std::cout<<"\ncoPa:"<<corruptPath;
         isCorrupted = true;
     }
     void hamming(std::bitset<(BIT_SIZE)> path, int id){
@@ -707,6 +713,7 @@ public:
         for (int i = 1; i < ARRLEN; i++){
             std::vector<int> waypointIds; // to track waypoint id's along path
             wa.waypointArray[i].visited = true;
+            
             buildPath(path, waypointIds, wa.waypointArray[i], wa.waypointArray[i].pos, wa.waypointArray[i].rot, wa.waypointArray[i].rot); // build all paths starting at each waypoint in turn (starting 'prev rot' is just 0)
             wa.unvisitAll(); // clear "visited" bool to start next path
         }
@@ -715,6 +722,7 @@ public:
     
     void buildPath(std::string path, std::vector<int> waypointIds, Waypoint w, Vector2d prevPos, double prevRot, double prevHeading){
         w.visited = true;
+        bool hasRotated = false;
         // access w.pos for current position
         // calculate heading for each new waypoint, and add w.bsd here in correct rotation
         double heading;
@@ -723,6 +731,9 @@ public:
         } else {
             heading = calculateHeading(prevPos, w.pos); // (prevPos, nextPos)
         }
+        
+        // can do retroactive rotation here, before new wp BSD is added
+        //path = retroActiveRotation(path, prevRot, prevHeading, heading);
         
         // add turn bit -- added BEFORE w BSD, since turn determined w/ prevPos to this wp
         // 2 bits (00=no turn, 10=left, 01=right, 11=not used)
@@ -734,13 +745,13 @@ public:
             turnBit = determineTurnBit2(prevHeading, heading);
         }
         
-        // rotate turnBit if needed (left --> right, etc)
+        // rotate turnBit if needed (left <--> right, etc)
         if (DIRECTED){
             path = path + turnBit + w.bsd;
         } else {
             //path = path + rotateTurn(turnBit, w.rot, heading) + rotateWaypoint(w, heading);
             // don't need to rotate turn bits, because calculation handles that already
-            path = path + turnBit + rotateWaypoint(w, heading);
+            path = path + turnBit + rotateWaypoint(w, heading, &hasRotated);
         }
         
         // add waypointId to vector of ids
@@ -756,8 +767,36 @@ public:
                     
                     wa.waypointArray[w.conns[i]].visited = true; // prevent loops
                     
-                    // path, waypointIds, w, prevPos, prevRot, prevHeading)
+                    // ISSUE : this is skipped for some paths that need it...
+                    if (!hasRotated){ // avoid double rotation -- potentially delete?
+                        // check for 1st wp or TJunction here, and rotate bsd if needed ->
+                        if ( (path.size() == BSD_PLUS_EXTRA) ){
+                            std::cout<<"\nfirst waypoint";
+                            // automatically rotates bsd if needed:
+                            // delete last bsd from path (exluding turn info)
+                            std::cout<<"\npath before: "<<path;
+                            path = path.substr(0, path.size()-BSDLEN);
+                            std::cout<<"\npath after : "<<path;
+                            double nextHeading = calculateHeading(w.pos, wa.waypointArray[w.conns[i]].pos);
+                            path = path + retroRotate(w, nextHeading); // returns w's bsd
+                            std::cout<<"\nfinal path : "<<path;
+                        } else if ( tJunction(prevRot, prevHeading) ){
+                            std::cout<<"\njunction found!";
+                            // TESTING -- can merge below with above, just need to check
+                            // that junctions are working
+                            std::cout<<"\npath before: "<<path;
+                            path = path.substr(0, path.size()-BSDLEN);
+                            std::cout<<"\npath after : "<<path;
+                            double nextHeading = calculateHeading(w.pos, wa.waypointArray[w.conns[i]].pos);
+                            path = path + retroRotate(w, nextHeading); // returns w's bsd
+                            std::cout<<"\nfinal path : "<<path;
+                            std::cout<<"\nw.id:"<<w.id<<" nextHeading:"<<nextHeading;
+                        }
+                    }
+                    
+                    // path, waypointIds, w, prevPos, prevRot, prevHeading, )
                     buildPath(path, waypointIds, wa.waypointArray[w.conns[i]], w.pos, w.rot, heading); // recursive call to continue building path
+                    hasRotated = false;
                     wa.waypointArray[w.conns[i]].visited = false; // allows all connections to be attempted (1 connection may lead to multiple possible paths)
                 }
             }
@@ -765,9 +804,26 @@ public:
         
         // path has reached limit add to tree if long enough
         if (path.length() == BIT_SIZE){
+            
+            /* WAIT THIS DOESN"T MAKE SENSE
+            // TODO retroactive rotation needed for final wp? its impossible to know...
+            if ( tJunction(prevRot, prevHeading) ){
+                std::cout<<"\njunction found!";
+                // TESTING -- can merge below with above, just need to check
+                // that junctions are working
+                std::cout<<"\npath before: "<<path;
+                path = path.substr(0, path.size()-BSDLEN);
+                std::cout<<"\npath after : "<<path;
+                double nextHeading = calculateHeading(prevPos, w.pos);
+                path = path + retroRotate(prevRot, prevBsd, nextHeading); // returns w's bsd
+                std::cout<<"\nfinal path : "<<path;
+                std::cout<<"\nw.id:"<<w.id<<" nextHeading:"<<nextHeading;
+            }*/
+            
             // convert string to bit
             std::bitset<(BIT_SIZE)> brd(path); // account for addition of turnBits (BRD_LEN-1)
             btree.addBrd(brd, waypointIds);
+            
             
             // TESTING
             std::cout<<"\nPATH ADDED:";
@@ -776,129 +832,84 @@ public:
                 std::cout<<"   "<<waypointIds.at(i);
             } std::cout<<std::endl;
             
-            // TESTING
-            testData5(path, waypointIds);
+            if (TEST_MODE_ACTIVE){
+                testData5(path, waypointIds);
+            }
         }
     }
-    
-    void testData5(std::string path, std::vector<int> waypointIds){
-        // convert waypoint ids to a string
-        std::string ids = "";
-        for(int i=0; i < waypointIds.size(); i++){
-            ids = ids + std::to_string(waypointIds.at(i));
+
+    /*
+    std::string retroRotateLast(double prevRot, std::string prevBsd, double heading){
+        // copy of rotateWaypoint without boolean values
+        double diff = abs(constrain(prevRot) - heading);
+        if ( (diff == 0) || (diff <= 90 && diff >= 0) || (diff >= 270 && diff <= 360) ){
+            return prevBsd;
         }
+        std::cout<<"\n---RETRO LAST ROTATE---";
+        return switchBsd(prevBsd);
+    }*/
+    
+    std::string retroRotate(Waypoint w, double heading){
+        // copy of rotateWaypoint without boolean values
+        double diff = abs(constrain(w.rot) - heading);
+        if ( (diff == 0) || (diff <= 90 && diff >= 0) || (diff >= 270 && diff <= 360) ){
+            return w.bsd;
+        }
+        std::cout<<"\n---RETRO ROTATE---";
+        return switchBsd(w.bsd);
+    }
+    
+    /*
+    std::string retroActiveRotation(std::string path, double prevRot, double prevHeading, double currHeading){
+        // if 1st wayoint, or T junction, go ahead and rotate if conditions met
+        // if 1st waypoint or T junction
+        if (path.size() == BSD_PLUS_EXTRA || tJunction(prevRot, prevHeading) ){
+            return rotatePrevWaypoint(path);
+        }
+        return path;
+    }*/
+    
+    bool tJunction(double prevRot, double prevHeading){
+        // prev heading intersected prev waypoint at a 90 degree angle, forming a T junction
+        double diff = abs(prevRot - prevHeading);
+        diff = constrain(diff);
+        if ( (diff > 45 && diff < 135) || (diff > 225 && diff < 315) ){
+            return true;
+        }
+        return false;
+    }
+    
+    /*
+    std::string rotatePrevWaypoint(std::string path){
+        // isolate string for final waypoint in path
+        int size = (int) path.size();
+        int finalStart = size-BSD_PLUS_EXTRA;
         
-        // check all paths
-        // 1s
-        if ( ids == "1234" ){
-            assert( path == "0000000100100111");
-        } else if ( ids == "1275" ){
-            assert( path == "0000000101110001");
-        } else if ( ids == "1657"){
-            assert( path == "0000000010101011");
-        } else if ( ids == "1654"){
-            assert( path == "0000000010100011");
-        }
-        // 2s
-        else if( ids == "2345" ){
-            assert( path == "0001001001110101" );
-        } else if ( ids == "2754" ){
-            assert( path == "0001001100011011" );
-        } else if ( ids == "2756" ){
-            assert( path == "0001001100010100" );
-        } else if ( ids == "2165" ){
-            assert( path == "0001000010001010" );
-        }
-        // 3s
-        else if( ids == "3457" ){
-            assert( path == "0010001101010111" );
-        } else if ( ids == "3456" ){
-            assert( path == "0010001101010000");
-        } else if ( ids == "3216" ){
-            assert( path == "0010001000001000");
-        } else if ( ids == "3275" ){
-            assert( path == "0010001010110001");
-        }
-        // 4s
-        else if( ids == "4572" ){
-            assert( path == "0011000101110001" );
-        } else if ( ids == "4561" ){
-            assert( path == "0011000100000100");
-        } else if ( ids == "4327" ){
-            assert( path == "0011000110101011");
-        } else if ( ids == "4321" ){
-            assert( path == "0011000110100000");
-        }
-        // 5s
-        else if( ids == "5612" ){
-            assert( path == "0001000001000101" );
-        } else if ( ids == "5721" ){
-            assert( path == "0001001100011000"); // change if adding retro-active rotation
-        } else if ( ids == "5723" ){
-            assert( path == "0001001100010110");
-        } else if ( ids == "5432" ){
-            assert( path == "0001001110011010");
-        }
-        // 6s
-        else if ( ids == "6572" ){
-            assert( path == "0000001010110001" ); // rotate 2 if adding retr-active rotation
-        } else if ( ids == "6543" ){
-            assert( path == "0000001000111001");
-        } else if ( ids == "6127" ){
-            assert( path == "0000000001010111");
-        } else if ( ids == "6123" ){
-            assert( path == "0000000001010010");
-        }
-        // 7s
-        else if ( ids == "7561" ){
-            assert( path == "0011000101000100" ); // rotate 2 if adding retr-active rotation
-        } else if ( ids == "7543" ){
-            assert( path == "0011000110111001" ); // rotate 2 if adding retr-active rotation
-        } else if ( ids == "7216" ){
-            assert( path == "0011000110001000"); // rotate 2 if adding retr-active rotation
-        } else if ( ids == "7234" ){
-            assert( path == "0011000101100111"); 
-        }
-    }
+        std::string finalWp = path.substr(finalStart, path.size());
+        // rest of string
+        std::string rest = path.substr(0, path.size()-BSD_PLUS_EXTRA-1);
+        
+        std::cout<<"\nfinalWP: "<<finalWp<<" ("<<finalStart<<", "<<path.size()<<")";
+        std::cout<<"\nrest   : "<<rest;
+        
+        // switch prev waypoint
+        finalWp = switchBsd(finalWp);
+        
+        // reconstruct path string & return
+        return rest + finalWp;
+    }*/
     
-    float calculateHeading(Vector2d prevPos, Vector2d nextPos){
+    double long calculateHeading(Vector2d prevPos, Vector2d nextPos){
         Vector2d square = Vector2d();
         square.x = (nextPos.x - prevPos.x);
         square.y = (nextPos.y - prevPos.y);
-        double heading = atan2(square.y, square.x);
-        // convert to degrees
-        heading = (heading * M_PI) * 360.0 / (2.0 * M_PI);
+        double long heading = atan2(square.y, square.x);
         
-        std::cout<<"\nP1("<<prevPos.x<<","<<prevPos.y<<")";
-        std::cout<<"\nP2("<<nextPos.x<<","<<nextPos.y<<")";
-
-        // was rotating opposite way than calculations expected,
-        // so instead of 90 it was returning 282 (270)
-        // and rather than 270 it was returning -287
-        std::cout<<"\nHEADING pre adjust: "<<heading;
-        if (heading == 0){
-        } else if (heading < 0){
-            heading = abs(heading);
-        } else if (heading > 0 && heading < 360){
-            heading = heading -180;
+        if (heading >=0 ){
+            heading = heading * 360/(2*M_PI);
         } else {
-            heading = heading - 360;
+            heading = (2*M_PI + heading) * 360/(2*M_PI);
         }
-        std::cout<<"\nHEADING post adjust: "<<heading;
-         
-         
-        /* OLD VERSION
-        float x1 = prevPos.x;
-        float y1 = prevPos.y;
-        float x2 = nextPos.x;
-        float y2 = nextPos.y;
-        // calculates direction of travel between 2 points
-        float theta_radians = atan2(y2 - y1, x2 - x1);
-        // convert to degrees
-        float theta_degrees = (theta_radians * M_PI) * 360.0 / (2.0 * M_PI);
-        return theta_degrees;
-         */
-        std::cout<<"\nheading: "<<heading;
         return heading;
     }
     
@@ -909,18 +920,7 @@ public:
         // constrain
         h1 = constrain(h1);
         h2 = constrain(h2);
-        
-        double diff = h2 - h1;
-        if (diff < 0){
-            diff += 360;
-        } else if (diff >= 360){
-            diff -= 360;
-        }
-        
-        std::cout<<"\nDetermine turn bit 2: ";
-        std::cout<<"\nprevHeading: "<<prevHeading<<" h1:"<<h1;
-        std::cout<<"\ncurrHeading: "<<heading<<" h2:"<<h2;
-        std::cout<<"\ndiff: "<<diff;
+        double diff = constrain(h2 - h1);
         
         if (diff > 225 && diff < 315){
             // right turn
@@ -930,60 +930,6 @@ public:
             return "10";
         }
         return "00";
-        
-        /*
-        // skip if one value 0
-        double diff;
-        if (h1 == 0 || h2 == 0){
-            diff = h1 - h2;
-        } else {
-            diff = fmod(h1, h2);
-            //if (diff < -180){
-            //    diff += 360;
-            // }
-            //if (diff >= 180){
-            //    diff -= 360;
-            // }
-        }
-    
-        
-        // left
-        if ( (diff < 135 && diff > 45) || (diff < -225 && diff > -315) ){
-            return "10";
-        }
-        
-        // right
-        if ( (diff < 315 && diff > 225) || (diff < -45 && diff > -135) ){
-            return "01";
-        }
-        
-        return turnBit;
-         */
-    }
-    
-    std::string determineTurnBit(double prevRot, double currRot){
-        // determines if a turn of greater than 20 degrees in either L/R has occurred
-        // 00=no turn, 01=right turn, 10=left turn
-        // to be added to BSD after rotation has been completed
-        // compare PREVIOUS heading to NEW HEADING
-        std::string turnBit = "00";
-        prevRot = constrain(prevRot);
-        currRot = constrain(currRot);
-        double temp = currRot - prevRot;
-        
-        // temp = constrain(temp);
-        if ( ((temp <= 180) && (temp > 45)) || ((temp < -180) && (temp > -315)) ){ // TODO correct?
-            // left turn
-            turnBit = "10";
-        } else if ( ((temp > 180) && (temp < 315)) || (temp < 0 && temp > -180) ){
-            // right turn
-            turnBit = "01";
-        }
-        
-        // TESTING
-        std::cout<<"\ndetermineTurnBit-- preRot:"<<prevRot<<" currRot:"<<currRot<<" turnB: "<<turnBit;
-        
-        return turnBit;
     }
     
     int constrain (int heading) {
@@ -1006,109 +952,18 @@ public:
         return false;
     }
     
-    /*
-    std::string rotateTurn(std::string turnBit, double rot, double heading){
-        
-        std::cout<<"\nrotateTurn-- heading:"<<heading<<" rot:"<<rot;
-        
-        return turnBit;
-        
-         V2
-        double diff = abs(rot - heading);
-        //diff = constrain(diff);
-        std::cout<<"\nrotateTurn-- diff: "<<diff;
-        if ( diff < 225 && diff > 135){
-            return switchTurn(turnBit);
-        } return turnBit;
-     
-
-        //V1
-        //if (hasRotation(rot, heading)){
-        //    return switchTurn(turnBit);
-        //}
-        //return turnBit;
-    }
-    
-    std::string switchTurn(std::string turnBit){
-        std::string newTurnBit = "";
-        // TESTING
-        std::cout<<"---switchTURNBit---";
-        if (turnBit.size() == 2){
-            newTurnBit = turnBit[1];
-            newTurnBit = newTurnBit + turnBit[0];
-        } else {
-            std::cout<<"\nPATH ERROR: turn bit is not expected length";
-        }
-        return newTurnBit;
-    }*/
-    
-    std::string rotateWaypoint(Waypoint w, double heading){
-        // if (nextWpHeading + heading is between (0 & 90) || (270 & 360) keep same BSD
-        // else, switch (mirror) bsd (when between 91 * 269) switch <-- do this version
-        double rot = w.rot;
-        double h = heading;
-        
-        while (rot < -180){
-            rot+=360;
-        }
-        while (rot > 180){
-            rot-=360;
-        }
-        while (h < -180){
-            h += 360;
-        }
-        while (h > 180){
-            h -= 360;
-        }
-        
-        // accepts input -180 to 180 range
-        std::cout<<"\nrotateWaypoint()-- rot:"<<rot<<" h:"<<h;
-        
-        // skip if one value 0
-        double diff;
-        if (rot == 0 || h == 0){
-            diff = abs(rot - h);
-        } else {
-            //diff = fmod(rot, h); WORKING UP TO 5s
-            diff = abs(rot - h);
-            if (diff < -360){
-                diff += 360;
-            }
-            if (diff >= 360){
-                diff -= 360;
-            }
-        }
-        std::cout<<" diff: "<<diff;
-        if (diff > (90+45) && diff < (180+45)){
-            return switchBsd(w.bsd);
-        }
-        return w.bsd;
-        
-        /* V2
-        // if heading is 180 degrees diff from rot, then switch bsd
-        double diff = abs(w.rot - heading);
-        std::cout<<"\nr:"<<w.rot<<" h:"<<heading;
-        diff = constrain(diff);
-        std::cout<<"\ndiff: "<<diff;
-        if ( diff < 180 && diff >= 0){
+    std::string rotateWaypoint(Waypoint w, double heading, bool* hasRotated){
+        double diff = abs(constrain(w.rot) - heading);
+        if ( (diff == 0) || (diff <= 90 && diff >= 0) || (diff >= 270 && diff <= 360) ){
+            *hasRotated = false;
             return w.bsd;
-        } return switchBsd(w.bsd);
-        */
-
-        
-        /* OLD METHOD V1
-        double temp = w.rot + heading;
-            temp = abs(temp);
-            temp = constrain(temp);
-        if ( (temp > 90) && (temp < 270) ){
-            return switchBsd(w.bsd);
-         } return w.bsd;
-         */
+        }
+        *hasRotated = true;
+        return switchBsd(w.bsd);
     }
     
     std::string switchBsd(std::string bsd){
-        // TESTING
-        std::cout<<"---bsd rotating---";
+        // has no effect on turn bits
         std::string newBsd = "";
         if (BSDLEN == 2){
             newBsd = bsd[1];
@@ -1149,20 +1004,22 @@ public:
         std::vector<SinglePath> allPaths = btree.getAllPaths();
         
         // pick 1 path randomly as target path, and corrupt it
-        int index = rand() % allPaths.size();
-        corruptPath(allPaths.at(index).path, allPaths.at(index).id);
-        
-        for(int i=0; i < allPaths.size(); i++){
-            cPath.hamming(allPaths.at(i).path, allPaths.at(i).id);
+        if (!allPaths.empty()){
+            int index = rand() % allPaths.size();
+            corruptPath(allPaths.at(index).path, allPaths.at(index).id);
+            
+            for(int i=0; i < allPaths.size(); i++){
+                cPath.hamming(allPaths.at(i).path, allPaths.at(i).id);
+            }
+            
+            // rank correct id and store information in another histogram
+            cPath.setRank();
+            int r = cPath.getRank();
+            if (r > RANK_STATS_SIZE -1 ){
+                r = RANK_STATS_SIZE -1;
+            }
+            rankHist[r] = rankHist[r] + 1;
         }
-        
-        // rank correct id and store information in another histogram
-        cPath.setRank();
-        int r = cPath.getRank();
-        if (r > RANK_STATS_SIZE -1 ){
-            r = RANK_STATS_SIZE -1;
-        }
-        rankHist[r] = rankHist[r] + 1;
     }
     
     void printStats(){
@@ -1196,6 +1053,244 @@ public:
         std::cout<<"\nFirst rank %: "<<percentRank1<<std::endl;
         std::cout<<std::endl;
     }
+    
+    // ---------------------- //
+    // ---- PATH TESTING ---- //
+    // ---------------------- //
+    
+    void test(){
+        std::cout<<"\nPath tests initiated";
+        testConstrain();
+        testHeading();
+        testRotateWaypoint();
+        testDetermineTurnBit2();
+        testTJunction();
+        // test retroActiveRotation
+        std::cout<<"\nPath tests complete";
+    }
+    
+    void testConstrain(){
+        std::cout<<"\nTesting Constrain(): ";
+        assert(constrain(90)    == 90);
+        assert(constrain(360)   == 0);
+        assert(constrain(-135)  == 225);
+        assert(constrain(-45)   == 315);
+        
+        std::cout<<" -- constrain tests passed";
+    }
+    
+    void testHeading(){
+        std::cout<<"\nTesting Heading():";
+        // test1
+        Vector2d a = Vector2d(); a.x = 3; a.y = 1;
+        Vector2d b = Vector2d(); b.x = 3; b.y = 3;
+        Vector2d c = Vector2d(); c.x = 1; c.y = 3;
+        Vector2d d = Vector2d(); d.x = 1; d.y = 1;
+        Vector2d e = Vector2d(); e.x = 3; e.y = -3;
+        Vector2d f = Vector2d(); f.x = 2; f.y = 2;
+        
+        double h1 = calculateHeading(a, b);
+        double h2 = calculateHeading(b, a);
+        double h3 = calculateHeading(b, c);
+        double h4 = calculateHeading(c, b);
+        double h5 = calculateHeading(a, e);
+        double h6 = calculateHeading(d, f);
+        double h7 = calculateHeading(c, f);
+        double h8 = calculateHeading(b, f);
+        double h9 = calculateHeading(a, f);
+        
+        assert((int) h1 == 90);
+        assert((int) h2 == 270);
+        assert((int) h3 == 180);
+        assert((int) h4 == 0);
+        assert((int) h5 == 270);
+        assert((int) h6 == 45);
+        assert((int) h7 == 315);
+        assert((int) h8 == 225);
+        assert((int) h9 == 135);
+        std::cout<<" --Heading tests passed";
+    }
+    
+    void testRotateWaypoint(){
+        // construct waypoints
+        std::cout<<"\nTesting RotateWaypoint(): ";
+        Waypoint w1 = Waypoint();
+        w1.rot = 0;
+        Vector2d pos1 = Vector2d(); pos1.x = 3; pos1.y = 1;
+        w1.pos = pos1;
+        
+        // test path in all directions
+        bool hasRotated = false;
+        w1.bsd = "01";
+        std::string p1 = rotateWaypoint(w1, 0, &hasRotated);
+        assert(p1 == "01");
+        assert(hasRotated == false);
+        p1 = rotateWaypoint(w1, 180, &hasRotated);
+        assert(p1 == "10");
+        assert(hasRotated == true);
+        hasRotated = false;
+        w1.bsd = "01";
+        p1 = rotateWaypoint(w1, 90, &hasRotated);
+        assert(p1 == "01");
+        hasRotated = false;
+        // test edge cases
+        p1 = rotateWaypoint(w1, 91, &hasRotated);
+        assert(p1 == "10");
+        hasRotated = true;
+        w1.bsd = "01";
+        p1 = rotateWaypoint(w1, 269, &hasRotated);
+        assert(p1 == "10");
+        hasRotated = true;
+        
+        Waypoint w2 = Waypoint();
+        w2.rot = -45;
+        Vector2d pos2 = Vector2d(); pos2.x = 3; pos2.y = 1;
+        w2.pos = pos2;
+        w2.bsd = "01";
+        hasRotated = false;
+        std::string p2 = rotateWaypoint(w2, 0, &hasRotated);
+        assert(p2 == "01");
+        assert( hasRotated == false);
+        p2 = rotateWaypoint(w2, 99, &hasRotated);
+        assert(p2 == "10");
+        w2.bsd = "01";
+        p2 = rotateWaypoint(w2, 45, &hasRotated);
+        assert(p2 == "01");
+        
+        Waypoint w3 = Waypoint();
+        w3.rot = -225;
+        Vector2d pos3 = Vector2d(); pos3.x = 3; pos3.y = 1;
+        w3.pos = pos3;
+        w3.bsd = "01";
+        std::string p3 = rotateWaypoint(w3, 0, &hasRotated);
+        assert(p3 == "10");
+        w3.bsd = "01";
+        p3 = rotateWaypoint(w3, 90, &hasRotated);
+        assert(p3 == "01");
+        w3.bsd = "01";
+        p3 = rotateWaypoint(w3, 45, &hasRotated);
+        assert(p3 == "01");
+        
+        std::cout<<" -- rotateWaypoint tests passed";
+    }
+    
+    void testDetermineTurnBit2(){
+        std::cout<<"\nTesting DetermineTurnBit(): ";
+        //  std::string determineTurnBit(double prevRot, double currRot)
+        assert( "00" == determineTurnBit2(0, 0) );
+        assert( "00" == determineTurnBit2(180, 180) );
+        assert( "00" == determineTurnBit2(0, 5) );
+        assert( "00" == determineTurnBit2(0, 40) );
+        assert( "00" == determineTurnBit2(90, 46) );
+        assert( "00" == determineTurnBit2(-135, 230) );
+        assert( "00" == determineTurnBit2(135, 180) );
+
+        assert( "01" == determineTurnBit2(0, 314) );
+        assert( "01" == determineTurnBit2(0, 226) );
+        assert( "01" == determineTurnBit2(0, -46) );
+        assert( "01" == determineTurnBit2(180, 90) );
+        assert( "01" == determineTurnBit2(180, 47) );
+
+        assert( "10" == determineTurnBit2(0, 90) );
+        assert( "10" == determineTurnBit2(-135, -46) );
+        assert( "10" == determineTurnBit2(180, 270) );
+        assert( "10" == determineTurnBit2(225, 300) );
+        assert( "10" == determineTurnBit2(0, 99) );
+        assert( "10" == determineTurnBit2(360, 90) );
+        
+        std::cout<<" -- turnBit tests passed";
+    }
+    
+    void testTJunction(){
+        std::cout<<"\nTesting TJunction(): ";
+        assert( tJunction( 0, 90)   == true );
+        assert( tJunction( 180, 95) == true );
+        assert( tJunction( 180, 46) == true );
+        
+        assert( tJunction( 0, 45)   == false );
+        assert( tJunction( 0, 10)   == false );
+        assert( tJunction( 0, -45)   == false );
+        std::cout<<" -- TJunction tests passed";
+    }
+    
+    void testData5(std::string path, std::vector<int> waypointIds){
+        // convert waypoint ids to a string
+        std::string ids = "";
+        for(int i=0; i < waypointIds.size(); i++){
+            ids = ids + std::to_string(waypointIds.at(i));
+        }
+        
+        // 1s
+        if ( ids == "1234" ){
+            assert( path == "0000000100100111");
+        } else if ( ids == "1275" ){
+            assert( path == "0000000101110001");
+        } else if ( ids == "1657"){
+            assert( path == "0000000010101011");
+        } else if ( ids == "1654"){
+            assert( path == "0000000010100011");
+        }
+        // 2s
+        else if( ids == "2345" ){
+            assert( path == "0001001001110101" );
+        } else if ( ids == "2754" ){
+            assert( path == "0001001100011011" );
+        } else if ( ids == "2756" ){
+            assert( path == "0001001100010100" );
+        } else if ( ids == "2165" ){
+            assert( path == "0010000010001010" );
+        }
+        // 3s
+        else if( ids == "3457" ){
+            assert( path == "0010001101010111" );
+        } else if ( ids == "3456" ){
+            assert( path == "0010001101010000");
+        } else if ( ids == "3216" ){
+            assert( path == "0010001000001000");
+        } else if ( ids == "3275" ){
+            assert( path == "0010001010110001");
+        }
+        // 4s
+        else if( ids == "4572" ){
+            assert( path == "0011000101110001" );
+        } else if ( ids == "4561" ){
+            assert( path == "0011000100000100");
+        } else if ( ids == "4327" ){
+            assert( path == "0011000110101011");
+        } else if ( ids == "4321" ){
+            assert( path == "0011000110100000");
+        }
+        // 5s
+        else if( ids == "5612" ){
+            assert( path == "0001000001000101" );
+        } else if ( ids == "5721" ){
+            assert( path == "0001001100101000"); // RETRO_ACTIVE TJUNCTION
+        } else if ( ids == "5723" ){
+            assert( path == "0001001100010110");
+        } else if ( ids == "5432" ){
+            assert( path == "0010001110011010");
+        }
+        // 6s
+        else if ( ids == "6572" ){
+            assert( path == "0000001010110001" ); // rotate 2 if adding retr-active rotation
+        } else if ( ids == "6543" ){
+            assert( path == "0000001000111001");
+        } else if ( ids == "6127" ){
+            assert( path == "0000000001010111");
+        } else if ( ids == "6123" ){
+            assert( path == "0000000001010010");
+        }
+        // 7s
+        else if ( ids == "7561" ){
+            assert( path == "0011000101000100" ); // rotate 2 if adding retr-active rotation
+        } else if ( ids == "7543" ){
+            assert( path == "0011000110111001" ); // rotate 2 if adding retr-active rotation
+        } else if ( ids == "7216" ){
+            assert( path == "0011000110001000"); // rotate 2 if adding retr-active rotation
+        } else if ( ids == "7234" ){
+            assert( path == "0011000101100111");
+        }
+    }
 };
 
 // ---------------------- //
@@ -1205,48 +1300,70 @@ int main(int argc, const char * argv[]) {
     
     srand((unsigned int)time(0));
     
-    /*
-     // find current working directy
-     char * dir = getcwd(NULL, 0);
-     std::cout << dir << std::endl;
-     */
-    // print info for file
-    std::cout<<"Number of waypoints: "<<BRD_LEN<<std::endl;
-    std::cout<<"Number of bits in BRD: "<<BRD_LEN * BSDLEN <<std::endl;
-    std::cout<<"Number of bits with Turns: "<<BRD_LEN * BSDLEN + BRD_LEN <<std::endl;
-    std::cout<<"Total number of waypoints: "<<TOTAL_WAYPOINTS<<std::endl;
-    std::cout<<"data file: "<<DATAFILE<<std::endl<<std::endl;;
-    
-    // pick path length
-    int pathlength = BRD_LEN; // number of waypoints per path
-    std::string data;
-    WaypointArray wa = WaypointArray(); // single waypoint array used throughout
-    std::string fileName = DATAFILE;
-    std::map<std::string, int> pathMap; // single map used throughout
-    
-    // generate string from file, builds waypoints from lines, stores them to waypoint array
-    DataProcessing dp = DataProcessing(fileName);
-    dp.process(&data, &wa);
-    std::cout << "data processed to waypoint array" << std::endl;
-    
-    // generate paths
-    Paths p = Paths(pathlength, &wa); // takes into account waypoint rotation and direction of travel
-    p.generatePaths();
-    std::cout << "paths generated" << std::endl;
-    
-    // TESTING CORRUPTED PATHS FOR MATCHES
-    std::cout << "corrupt path test:"<< std::endl;
-    // pick a random unique path, and store final waypointId of path (this will be used for accuracy)
+    if (TEST_MODE_ACTIVE){
+        std::cout<<"\nTEST MODE ACTIVE"<<std::endl;
+        
+        // the following tests are ONLY for testData5
+        std::string data;
+        WaypointArray wa = WaypointArray(); // single waypoint array used throughout
+        std::map<std::string, int> pathMap; // single map used throughout
+        
+        // generate string from file, builds waypoints from lines, stores them to waypoint array
+        DataProcessing dp = DataProcessing(TESTDATAFILE);
+        dp.process(&data, &wa);
+        std::cout << "data processed to waypoint array" << std::endl;
+        
+        // generate paths
+        Paths p = Paths(BRD_LEN, &wa); // takes into account waypoint rotation and direction of travel
+        p.test();
+        p.generatePaths();
+        
+        //p.generatePaths();
+        std::cout << "\nTests completed successfully" << std::endl;
+        
+    } else {
+        /*
+         // find current working directy
+         char * dir = getcwd(NULL, 0);
+         std::cout << dir << std::endl;
+         */
+        // print info for file
+        std::cout<<"Number of waypoints: "<<BRD_LEN<<std::endl;
+        std::cout<<"Number of bits in BRD: "<<BRD_LEN * BSDLEN <<std::endl;
+        std::cout<<"Number of bits with Turns: "<<BRD_LEN * BSDLEN + BRD_LEN <<std::endl;
+        std::cout<<"Total number of waypoints: "<<TOTAL_WAYPOINTS<<std::endl;
+        std::cout<<"data file: "<<DATAFILE<<std::endl<<std::endl;;
+        
+        // pick path length
+        std::string data;
+        WaypointArray wa = WaypointArray(); // single waypoint array used throughout
+        std::string fileName = DATAFILE;
+        std::map<std::string, int> pathMap; // single map used throughout
+        
+        // generate string from file, builds waypoints from lines, stores them to waypoint array
+        DataProcessing dp = DataProcessing(fileName);
+        dp.process(&data, &wa);
+        std::cout << "data processed to waypoint array" << std::endl;
+        
+        // generate paths
+        Paths p = Paths(BRD_LEN, &wa); // takes into account waypoint rotation and direction of travel
+        p.generatePaths();
+        std::cout << "paths generated" << std::endl;
+        
+        // TESTING CORRUPTED PATHS FOR MATCHES
+        std::cout << "corrupt path testing"<< std::endl;
+        // pick a random unique path, and store final waypointId of path (this will be used for accuracy)
         // could randomly pick one while generating tree?
         // to start, I'll just pick a path
-    
-    // TODO LOOP OVER THIS X TIMES
-    for(int i=0; i < 1; i++){
-        p.distanceAllPaths();
-        //p.printStats();
+        
+        // TODO LOOP OVER THIS X TIMES
+        for(int i=0; i < 1; i++){
+            p.distanceAllPaths();
+            //p.printStats();
+        }
+        p.printRankStats();
+        // TODO Print total rank stats
+        
     }
-    p.printRankStats();
-    // TODO Print total rank stats
-    
     return 0;
 }
