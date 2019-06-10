@@ -758,7 +758,7 @@ public:
         waypointIds.push_back(w.id);
         
         // check for connections if path length not reached yet
-        if (path.length() < BIT_SIZE){
+        if (path.length() < BIT_SIZE){ //
             // check every connection
             for(int i = 0; i < w.conns.size(); i++){
                 // if connection has not been visited yet, visit it
@@ -768,6 +768,7 @@ public:
                     wa.waypointArray[w.conns[i]].visited = true; // prevent loops
                     
                     // ISSUE : this is skipped for some paths that need it...
+                    std::cout<<"\nhasROtated:"<<hasRotated<<" w:"<<w.id<<" conn.id"<<wa.waypointArray[w.conns[i]].id;
                     if (!hasRotated){ // avoid double rotation -- potentially delete?
                         // check for 1st wp or TJunction here, and rotate bsd if needed ->
                         if ( (path.size() == BSD_PLUS_EXTRA) ){
@@ -780,7 +781,8 @@ public:
                             double nextHeading = calculateHeading(w.pos, wa.waypointArray[w.conns[i]].pos);
                             path = path + retroRotate(w, nextHeading); // returns w's bsd
                             std::cout<<"\nfinal path : "<<path;
-                        } else if ( tJunction(prevRot, prevHeading) ){
+                        } else if ( tJunction(w.rot, prevHeading) ){
+                            // issue is junctions not all being found!
                             std::cout<<"\njunction found!";
                             // TESTING -- can merge below with above, just need to check
                             // that junctions are working
@@ -1234,7 +1236,7 @@ public:
         else if( ids == "2345" ){
             assert( path == "0001001001110101" );
         } else if ( ids == "2754" ){
-            assert( path == "0001001100011011" );
+            assert( path == "0001001100101011" ); // retroRotate
         } else if ( ids == "2756" ){
             assert( path == "0001001100010100" );
         } else if ( ids == "2165" ){
@@ -1272,7 +1274,7 @@ public:
         }
         // 6s
         else if ( ids == "6572" ){
-            assert( path == "0000001010110001" ); // rotate 2 if adding retr-active rotation
+            assert( path == "0000001010110001" );
         } else if ( ids == "6543" ){
             assert( path == "0000001000111001");
         } else if ( ids == "6127" ){
@@ -1284,9 +1286,9 @@ public:
         else if ( ids == "7561" ){
             assert( path == "0011000101000100" ); // rotate 2 if adding retr-active rotation
         } else if ( ids == "7543" ){
-            assert( path == "0011000110111001" ); // rotate 2 if adding retr-active rotation
+            assert( path == "0011001010111001" ); // rotate 2 if adding retr-active rotation
         } else if ( ids == "7216" ){
-            assert( path == "0011000110001000"); // rotate 2 if adding retr-active rotation
+            assert( path == "0011001010001000"); // rotate 2 if adding retr-active rotation
         } else if ( ids == "7234" ){
             assert( path == "0011000101100111");
         }
