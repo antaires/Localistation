@@ -36,20 +36,20 @@
 #define OUTPUT "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/histogram_output/output.txt"
 // test mode
 #define TEST_MODE_ACTIVE false
-#define HEADING true
-#define TWO_BIT_TURN true
-// distance stats
-#define LOWER_RANGE 0
-#define UPPER_RANGE 10
-#define RANK_STATS_SIZE 11
-
+#define HEADING true // + 3 bits
+#define TWO_BIT_TURN true // + 2 bits
 // Change this depending on turn/heading bits (un)used
 // 0 = no turn info
 // 1 = 1 bit turn info
 // 2 = 2 bit turn info
 // heading is 3 bits: 0-N, 1-NE, 2-E, 3-SE, 4-S, 5-SW, 6-W, 7-NW where
 // N=90, E=0, S=270, W=180
-#define EXTRA_BITS 2 //number of bits added to semantic BSD from turns, heading etc
+#define EXTRA_BITS 5 //number of bits added to semantic BSD from turns, heading etc
+
+// distance stats
+#define LOWER_RANGE 0
+#define UPPER_RANGE 10
+#define RANK_STATS_SIZE 11
 
 // don't change
 #define BSD_PLUS_EXTRA BSDLEN+EXTRA_BITS
@@ -601,17 +601,29 @@ public:
         // ASSUMES TURN BIT(s) OCCURS AS FIRST BIT OF BSD
         // so for a 2 bit BSD, it would be: turnbit=x, bsd=yy: xyyxyyxyyxyy
         // and it will only corrupt the y's and skip over the x's
-        int turnBitCount = 0;
+        int extraBitCount = 0;
         // loop over bits and flip 25% of the time (for total accuracy of 75%)
         for (int i = (BIT_SIZE)-1; i >= 0; i--){ // not in reverse, but for binary, 0 starst on far right
             // flips bit 25% of the time, but leaves turn bits as is
-            if ( (turnBitCount != 0) && (turnBitCount != 1) ){  // skips turn bits TODO - should these also be corrupted? accuracy of compass?
+            if (HEADING && !TWO_BIT_TURN){
+                if ( (extraBitCount != 0) && (extraBitCount != 1) && (extraBitCount != 2) ){  // skips heading bits TODO - should these also be corrupted? accuracy of compass?
+                    if (flip25()){
+                        corruptPath[i] = !corruptPath[i];
+                    }
+                }
+            } else if (HEADING && TWO_BIT_TURN){
+                if ( (extraBitCount != 0) && (extraBitCount != 1) && (extraBitCount != 2) && (extraBitCount != 3) && extraBitCount != 4 ){  // skips heading bits && turnBits
+                    if (flip25()){
+                        corruptPath[i] = !corruptPath[i];
+                    }
+                }
+            } else {
                 if (flip25()){
                     corruptPath[i] = !corruptPath[i];
                 }
             }
-            turnBitCount++;
-            turnBitCount = turnBitCount % (BSD_PLUS_EXTRA);
+            extraBitCount++;
+            extraBitCount = extraBitCount % (BSD_PLUS_EXTRA);
         }
         //std::cout<<"\ncoPa:"<<corruptPath;
         isCorrupted = true;
@@ -738,28 +750,30 @@ public:
             heading = calculateHeading(prevPos, w.pos); // (prevPos, nextPos)
         }
         
-        // can do retroactive rotation here, before new wp BSD is added
-        //path = retroActiveRotation(path, prevRot, prevHeading, heading);
-        
-        // add turn bit -- added BEFORE w BSD, since turn determined w/ prevPos to this wp
-        // 2 bits (00=no turn, 10=left, 01=right, 11=not used)
-        std::string turnBit;
-        if (path.size() <= BSDLEN + 2){
-            turnBit = "00"; // no turns for first 2 waypoints, as it will always be a straight line
-        } else {
-            //std::string turnBit = determineTurnBit(prevRot, w.rot);
-            turnBit = determineTurnBit2(prevHeading, heading);
+        // add turn bits, heading bits, and rotate BSD if needed:
+        if (TWO_BIT_TURN){
+            // add turn bit -- added BEFORE w BSD, since turn determined w/ prevPos to this wp
+            // 2 bits (00=no turn, 10=left, 01=right, 11=not used)
+            std::string turnBit;
+            if (path.size() <= BSDLEN + 2){
+                turnBit = "00"; // no turns for first 2 waypoints, as it will always be a straight line
+            } else {
+                //std::string turnBit = determineTurnBit(prevRot, w.rot);
+                turnBit = determineTurnBit2(prevHeading, heading);
+            }
+            path = path + turnBit;
         }
-        
-        std::string headingBit = "000";
-        
-        // rotate turnBit if needed (left <--> right, etc)
+        if (HEADING){
+            // added after turn bit (if exists) and BEFORE bsd
+            std::string headingBit = setHeadingBit(heading);
+            path = path + headingBit;
+        }
         if (DIRECTED){
-            path = path + turnBit + w.bsd;
-        } else {
+            path = path + w.bsd;
+        } else { // not directed
             //path = path + rotateTurn(turnBit, w.rot, heading) + rotateWaypoint(w, heading);
             // don't need to rotate turn bits, because calculation handles that already
-            path = path + turnBit + rotateWaypoint(w, heading, &hasRotated);
+            path = path + rotateWaypoint(w, heading, &hasRotated);
         }
         
         // add waypointId to vector of ids
@@ -779,7 +793,26 @@ public:
                     // (such as rotation of 1st waypoint, or ration at a junction)
                     if (!hasRotated){ // avoid double rotation
                         // check for 1st wp or TJunction here, and rotate bsd if needed ->
-                        if ( (path.size() == BSD_PLUS_EXTRA) || (tJunction(w.rot, prevHeading)) ){
+                        if ( (path.size() == BSD_PLUS_EXTRA) ){
+                            // automatically rotates bsd for 1st bit
+                            if ( !HEADING && !TWO_BIT_TURN ){
+                                // delete last bsd from path (exluding turn info) and re-compute bsd orientation
+                                path = path.substr(0, path.size()-BSDLEN);
+                                double nextHeading = calculateHeading(w.pos, wa.waypointArray[w.conns[i]].pos);
+                                path = path + retroRotate(w, nextHeading); // returns w's bsd
+                            } else if ( HEADING && !TWO_BIT_TURN ){
+                                // delete whole path and recompute for correct heading + bsd rotation
+                                double nextHeading = calculateHeading(w.pos, wa.waypointArray[w.conns[i]].pos);
+                                path = setHeadingBit(nextHeading);
+                                path = path + retroRotate(w, nextHeading); // returns w's bsd
+                            } else if ( HEADING && TWO_BIT_TURN){
+                                double nextHeading = calculateHeading(w.pos, wa.waypointArray[w.conns[i]].pos);
+                                path = determineTurnBit2(prevHeading, heading) + setHeadingBit(nextHeading);
+                                path = path + retroRotate(w, nextHeading); // returns w's bsd
+                            } else {
+                                std::cout<<"ERROR: check retroRotation on build path";
+                            }
+                        } else if ( tJunction(w.rot, prevHeading) ){
                             // automatically rotates bsd if needed:
                             // delete last bsd from path (exluding turn info) and re-compute bsd orientation
                             path = path.substr(0, path.size()-BSDLEN);
@@ -815,6 +848,32 @@ public:
                 testData5(path, waypointIds);
             }
         }
+    }
+    
+    std::string setHeadingBit(double heading){
+        std::string headingBit = "";
+        // <= for upper bit, > for lower
+        // for simplicity, cast heading as int, and shave off 0.5 on each segment, to
+        // avoid floating point comparison
+        int h = (int) constrain(heading);
+        if (h <= 112 && h > 67){        // N - 000
+            headingBit = "000";
+        } else if (h <= 67 && h > 22){  // NE - 001
+            headingBit = "001";
+        } else if (h <= 22 || h > 337){ // E - 010
+            headingBit = "010";
+        } else if (h <= 337 && h > 292){// SE - 011
+            headingBit = "011";
+        } else if (h <= 292 && h > 247){// S - 100
+            headingBit = "100";
+        } else if (h <= 247 && h > 202){// SW - 101
+            headingBit = "101";
+        } else if (h <= 202 && h > 157){// W - 110
+            headingBit = "110";
+        } else if (h <= 157 && h > 112){// NW - 111
+            headingBit = "111";
+        }
+        return headingBit;
     }
     
     std::string retroRotate(Waypoint w, double heading){
@@ -1162,75 +1221,149 @@ public:
             ids = ids + std::to_string(waypointIds.at(i));
         }
         
-        // 1s
-        if ( ids == "1234" ){
-            assert( path == "0000000100100111");
-        } else if ( ids == "1275" ){
-            assert( path == "0000000101110001");
-        } else if ( ids == "1657"){
-            assert( path == "0000000010101011");
-        } else if ( ids == "1654"){
-            assert( path == "0000000010100011");
-        }
-        // 2s
-        else if( ids == "2345" ){
-            assert( path == "0001001001110101" );
-        } else if ( ids == "2754" ){
-            assert( path == "0001001100101011" ); // retroRotate
-        } else if ( ids == "2756" ){
-            assert( path == "0001001100010100" );
-        } else if ( ids == "2165" ){
-            assert( path == "0010000010001010" );
-        }
-        // 3s
-        else if( ids == "3457" ){
-            assert( path == "0010001101010111" );
-        } else if ( ids == "3456" ){
-            assert( path == "0010001101010000");
-        } else if ( ids == "3216" ){
-            assert( path == "0010001000001000");
-        } else if ( ids == "3275" ){
-            assert( path == "0010001010110001");
-        }
-        // 4s
-        else if( ids == "4572" ){
-            assert( path == "0011000101110001" );
-        } else if ( ids == "4561" ){
-            assert( path == "0011000100000100");
-        } else if ( ids == "4327" ){
-            assert( path == "0011000110101011");
-        } else if ( ids == "4321" ){
-            assert( path == "0011000110100000");
-        }
-        // 5s
-        else if( ids == "5612" ){
-            assert( path == "0001000001000101" );
-        } else if ( ids == "5721" ){
-            assert( path == "0001001100101000"); // RETRO_ACTIVE TJUNCTION
-        } else if ( ids == "5723" ){
-            assert( path == "0001001100010110");
-        } else if ( ids == "5432" ){
-            assert( path == "0010001110011010");
-        }
-        // 6s
-        else if ( ids == "6572" ){
-            assert( path == "0000001010110001" );
-        } else if ( ids == "6543" ){
-            assert( path == "0000001000111001");
-        } else if ( ids == "6127" ){
-            assert( path == "0000000001010111");
-        } else if ( ids == "6123" ){
-            assert( path == "0000000001010010");
-        }
-        // 7s
-        else if ( ids == "7561" ){
-            assert( path == "0011000101000100" ); // rotate 2 if adding retr-active rotation
-        } else if ( ids == "7543" ){
-            assert( path == "0011001010111001" ); // rotate 2 if adding retr-active rotation
-        } else if ( ids == "7216" ){
-            assert( path == "0011001010001000"); // rotate 2 if adding retr-active rotation
-        } else if ( ids == "7234" ){
-            assert( path == "0011000101100111");
+        if (HEADING && !TWO_BIT_TURN){
+            // 1s
+            if ( ids == "1234" ){
+                assert( path == "01000010010101010011");
+            } else if ( ids == "1275" ){
+                assert( path == "01000010011001110001");
+            } else if ( ids == "1657"){
+                assert( path == "10000100000101000011"); // CHANGED FOR RETRO ROTATE
+            } else if ( ids == "1654"){
+                assert( path == "10000100000101001011"); // changed for RR
+            }
+            // 2s
+            else if( ids == "2345" ){
+                assert( path == "01001010101001111001" );
+            } else if ( ids == "2754" ){
+                assert( path == "10001100111001001011" ); // retroRotate
+            } else if ( ids == "2756" ){
+                assert( path == "10001100111000111000" );
+            } else if ( ids == "2165" ){ // RR
+                assert( path == "11010110001000001010" );
+            }
+            // 3s
+            else if( ids == "3457" ){
+                assert( path == "10010100111100100011" );
+            } else if ( ids == "3456" ){
+                assert( path == "10010100111100111000");
+            } else if ( ids == "3216" ){
+                assert( path == "11010110101100010000");
+            } else if ( ids == "3275" ){
+                assert( path == "11010110101001110001");
+            }
+            // 4s
+            else if( ids == "4572" ){
+                assert( path == "11011110010001100001" );
+            } else if ( ids == "4561" ){
+                assert( path == "11011110011100000000");
+            } else if ( ids == "4327" ){
+                assert( path == "00011000011101010011");
+            } else if ( ids == "4321" ){
+                assert( path == "00011000011101011000");
+            }
+            // 5s
+            else if( ids == "5612" ){
+                assert( path == "11001110000000001001" );
+            } else if ( ids == "5721" ){
+                assert( path == "00001000110001011000"); // RETRO_ACTIVE TJUNCTION
+            } else if ( ids == "5723" ){
+                assert( path == "00001000110000101010");
+            } else if ( ids == "5432" ){ // retroActive
+                assert( path == "01010010110000111010");
+            }
+            // 6s
+            else if ( ids == "6572" ){
+                assert( path == "01000010100001100001" );
+            } else if ( ids == "6543" ){
+                assert( path == "01000010100101100001");
+            } else if ( ids == "6127" ){
+                assert( path == "00000000000100110011");
+            } else if ( ids == "6123" ){
+                assert( path == "00000000000100101010");
+            }
+            // 7s
+            else if ( ids == "7561" ){
+                assert( path == "10011100011100000000" ); // RR
+            } else if ( ids == "7543" ){
+                assert( path == "10011100100101100001" ); // RR
+            } else if ( ids == "7216" ){
+                assert( path == "00011000101100010000"); // RR
+            } else if ( ids == "7234" ){
+                assert( path == "00011000010101010011");
+            }
+
+        } else if (TWO_BIT_TURN && !HEADING){
+            // 1s
+            if ( ids == "1234" ){
+                assert( path == "0000000100100111");
+            } else if ( ids == "1275" ){
+                assert( path == "0000000101110001");
+            } else if ( ids == "1657"){
+                assert( path == "0000000010101011");
+            } else if ( ids == "1654"){
+                assert( path == "0000000010100011");
+            }
+            // 2s
+            else if( ids == "2345" ){
+                assert( path == "0001001001110101" );
+            } else if ( ids == "2754" ){
+                assert( path == "0001001100101011" ); // retroRotate
+            } else if ( ids == "2756" ){
+                assert( path == "0001001100010100" );
+            } else if ( ids == "2165" ){
+                assert( path == "0010000010001010" );
+            }
+            // 3s
+            else if( ids == "3457" ){
+                assert( path == "0010001101010111" );
+            } else if ( ids == "3456" ){
+                assert( path == "0010001101010000");
+            } else if ( ids == "3216" ){
+                assert( path == "0010001000001000");
+            } else if ( ids == "3275" ){
+                assert( path == "0010001010110001");
+            }
+            // 4s
+            else if( ids == "4572" ){
+                assert( path == "0011000101110001" );
+            } else if ( ids == "4561" ){
+                assert( path == "0011000100000100");
+            } else if ( ids == "4327" ){
+                assert( path == "0011000110101011");
+            } else if ( ids == "4321" ){
+                assert( path == "0011000110100000");
+            }
+            // 5s
+            else if( ids == "5612" ){
+                assert( path == "0001000001000101" );
+            } else if ( ids == "5721" ){
+                assert( path == "0001001100101000"); // RETRO_ACTIVE TJUNCTION
+            } else if ( ids == "5723" ){
+                assert( path == "0001001100010110");
+            } else if ( ids == "5432" ){
+                assert( path == "0010001110011010");
+            }
+            // 6s
+            else if ( ids == "6572" ){
+                assert( path == "0000001010110001" );
+            } else if ( ids == "6543" ){
+                assert( path == "0000001000111001");
+            } else if ( ids == "6127" ){
+                assert( path == "0000000001010111");
+            } else if ( ids == "6123" ){
+                assert( path == "0000000001010010");
+            }
+            // 7s
+            else if ( ids == "7561" ){
+                assert( path == "0011000101000100" ); // rotate 2 if adding retr-active rotation
+            } else if ( ids == "7543" ){
+                assert( path == "0011001010111001" ); // rotate 2 if adding retr-active rotation
+            } else if ( ids == "7216" ){
+                assert( path == "0011001010001000"); // rotate 2 if adding retr-active rotation
+            } else if ( ids == "7234" ){
+                assert( path == "0011000101100111");
+            }
         }
     }
 };
@@ -1271,8 +1404,8 @@ int main(int argc, const char * argv[]) {
          */
         // print info for file
         std::cout<<"Number of waypoints: "<<BRD_LEN<<std::endl;
-        std::cout<<"Number of bits in BRD: "<<BRD_LEN * BSDLEN <<std::endl;
-        std::cout<<"Number of bits with Turns: "<<BRD_LEN * BSDLEN + BRD_LEN <<std::endl;
+        //std::cout<<"Number of bits in BRD: "<<BRD_LEN * BSDLEN <<std::endl;
+        std::cout<<"Number of bits: "<<BRD_LEN * (BSDLEN + EXTRA_BITS) <<std::endl;
         std::cout<<"Total number of waypoints: "<<TOTAL_WAYPOINTS<<std::endl;
         std::cout<<"data file: "<<DATAFILE<<std::endl<<std::endl;;
         
