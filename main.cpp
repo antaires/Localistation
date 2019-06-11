@@ -25,17 +25,19 @@
 #include <map> // for storing unique BRDs and counting how often they occur
 
 // adding to new github
-#define BRD_LEN 4 // number of waypoints in BRD
-#define TOTAL_WAYPOINTS 7 // total number of waypoints entered in text file
+#define BRD_LEN 50 // number of waypoints in BRD
+#define TOTAL_WAYPOINTS 284 // total number of waypoints entered in text file
 #define MAXLINELEN 100 // maximum length of waypoint data for total waypoints < 1000 (000 00 heading x y 000 000 000....?)
-#define BSDLEN 2 // number of bits in a BSD
-//#define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/data/undirected/doors_walls_FBLR/distance2/data_distance2_284_FBLR.txt"
+#define BSDLEN 4 // number of bits in a BSD
+#define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/data/undirected/doors_walls_FBLR/distance2/data_distance2_284_FBLR.txt"
 //test datafile
-#define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/testData5.txt"
+//#define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/testData5.txt"
 #define TESTDATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/testData5.txt"
 #define OUTPUT "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/histogram_output/output.txt"
 // test mode
-#define TEST_MODE_ACTIVE true
+#define TEST_MODE_ACTIVE false
+#define HEADING true
+#define TWO_BIT_TURN true
 // distance stats
 #define LOWER_RANGE 0
 #define UPPER_RANGE 10
@@ -45,6 +47,8 @@
 // 0 = no turn info
 // 1 = 1 bit turn info
 // 2 = 2 bit turn info
+// heading is 3 bits: 0-N, 1-NE, 2-E, 3-SE, 4-S, 5-SW, 6-W, 7-NW where
+// N=90, E=0, S=270, W=180
 #define EXTRA_BITS 2 //number of bits added to semantic BSD from turns, heading etc
 
 // don't change
@@ -213,10 +217,10 @@ public:
     
     // go through each path of tree, build BRD, print waypoint ids vector, print count
     void print(){
-        //std::cout<<"\nPRINTING TREE: " << std::endl;
-        //std::string p = "";
-        //printTree(&root, p, BRD_LEN*BSDLEN + BRD_LEN);
-        //printStats();
+        std::cout<<"\nPRINTING TREE: " << std::endl;
+        std::string p = "";
+        printTree(&root, p, BIT_SIZE);
+        printStats();
         //std::cout<<"\nPRINTING TEST TREE: " << std::endl;
         //printTestTree(&root);
     }
@@ -308,8 +312,10 @@ public:
                 std::cout<<"Count "<<std::setw(3)<<i<<" Occurred: "<<statsArray[i]<<std::endl;
             }
         }
-        std::cout<<"Total paths: "<<sumStatsArray()<<std::endl;
+        std::cout<<"Total paths : "<<sumStatsArray()<<std::endl;
         std::cout<<"Unique paths: "<<statsArray[1]<<std::endl;
+        double percentUnique = ((float)statsArray[1] / (float)sumStatsArray()) * 100.0;
+        std::cout<<"% Unique    : "<<percentUnique<<std::endl;
     }
     
     int sumStatsArray(){
@@ -745,6 +751,8 @@ public:
             turnBit = determineTurnBit2(prevHeading, heading);
         }
         
+        std::string headingBit = "000";
+        
         // rotate turnBit if needed (left <--> right, etc)
         if (DIRECTED){
             path = path + turnBit + w.bsd;
@@ -767,32 +775,16 @@ public:
                     
                     wa.waypointArray[w.conns[i]].visited = true; // prevent loops
                     
-                    // ISSUE : this is skipped for some paths that need it...
-                    std::cout<<"\nhasROtated:"<<hasRotated<<" w:"<<w.id<<" conn.id"<<wa.waypointArray[w.conns[i]].id;
-                    if (!hasRotated){ // avoid double rotation -- potentially delete?
+                    // Retro-Active rotation for bsd's that couldn't be determined before
+                    // (such as rotation of 1st waypoint, or ration at a junction)
+                    if (!hasRotated){ // avoid double rotation
                         // check for 1st wp or TJunction here, and rotate bsd if needed ->
-                        if ( (path.size() == BSD_PLUS_EXTRA) ){
-                            std::cout<<"\nfirst waypoint";
+                        if ( (path.size() == BSD_PLUS_EXTRA) || (tJunction(w.rot, prevHeading)) ){
                             // automatically rotates bsd if needed:
-                            // delete last bsd from path (exluding turn info)
-                            std::cout<<"\npath before: "<<path;
+                            // delete last bsd from path (exluding turn info) and re-compute bsd orientation
                             path = path.substr(0, path.size()-BSDLEN);
-                            std::cout<<"\npath after : "<<path;
                             double nextHeading = calculateHeading(w.pos, wa.waypointArray[w.conns[i]].pos);
                             path = path + retroRotate(w, nextHeading); // returns w's bsd
-                            std::cout<<"\nfinal path : "<<path;
-                        } else if ( tJunction(w.rot, prevHeading) ){
-                            // issue is junctions not all being found!
-                            std::cout<<"\njunction found!";
-                            // TESTING -- can merge below with above, just need to check
-                            // that junctions are working
-                            std::cout<<"\npath before: "<<path;
-                            path = path.substr(0, path.size()-BSDLEN);
-                            std::cout<<"\npath after : "<<path;
-                            double nextHeading = calculateHeading(w.pos, wa.waypointArray[w.conns[i]].pos);
-                            path = path + retroRotate(w, nextHeading); // returns w's bsd
-                            std::cout<<"\nfinal path : "<<path;
-                            std::cout<<"\nw.id:"<<w.id<<" nextHeading:"<<nextHeading;
                         }
                     }
                     
@@ -807,49 +799,23 @@ public:
         // path has reached limit add to tree if long enough
         if (path.length() == BIT_SIZE){
             
-            /* WAIT THIS DOESN"T MAKE SENSE
-            // TODO retroactive rotation needed for final wp? its impossible to know...
-            if ( tJunction(prevRot, prevHeading) ){
-                std::cout<<"\njunction found!";
-                // TESTING -- can merge below with above, just need to check
-                // that junctions are working
-                std::cout<<"\npath before: "<<path;
-                path = path.substr(0, path.size()-BSDLEN);
-                std::cout<<"\npath after : "<<path;
-                double nextHeading = calculateHeading(prevPos, w.pos);
-                path = path + retroRotate(prevRot, prevBsd, nextHeading); // returns w's bsd
-                std::cout<<"\nfinal path : "<<path;
-                std::cout<<"\nw.id:"<<w.id<<" nextHeading:"<<nextHeading;
-            }*/
-            
             // convert string to bit
             std::bitset<(BIT_SIZE)> brd(path); // account for addition of turnBits (BRD_LEN-1)
             btree.addBrd(brd, waypointIds);
             
-            
             // TESTING
+            /*
             std::cout<<"\nPATH ADDED:";
             std::cout<<"\n"<<brd<<std::endl;
             for(int i=0; i < waypointIds.size(); i++){
                 std::cout<<"   "<<waypointIds.at(i);
             } std::cout<<std::endl;
-            
+            */
             if (TEST_MODE_ACTIVE){
                 testData5(path, waypointIds);
             }
         }
     }
-
-    /*
-    std::string retroRotateLast(double prevRot, std::string prevBsd, double heading){
-        // copy of rotateWaypoint without boolean values
-        double diff = abs(constrain(prevRot) - heading);
-        if ( (diff == 0) || (diff <= 90 && diff >= 0) || (diff >= 270 && diff <= 360) ){
-            return prevBsd;
-        }
-        std::cout<<"\n---RETRO LAST ROTATE---";
-        return switchBsd(prevBsd);
-    }*/
     
     std::string retroRotate(Waypoint w, double heading){
         // copy of rotateWaypoint without boolean values
@@ -857,19 +823,9 @@ public:
         if ( (diff == 0) || (diff <= 90 && diff >= 0) || (diff >= 270 && diff <= 360) ){
             return w.bsd;
         }
-        std::cout<<"\n---RETRO ROTATE---";
+        //std::cout<<"\n---RETRO ROTATE---";
         return switchBsd(w.bsd);
     }
-    
-    /*
-    std::string retroActiveRotation(std::string path, double prevRot, double prevHeading, double currHeading){
-        // if 1st wayoint, or T junction, go ahead and rotate if conditions met
-        // if 1st waypoint or T junction
-        if (path.size() == BSD_PLUS_EXTRA || tJunction(prevRot, prevHeading) ){
-            return rotatePrevWaypoint(path);
-        }
-        return path;
-    }*/
     
     bool tJunction(double prevRot, double prevHeading){
         // prev heading intersected prev waypoint at a 90 degree angle, forming a T junction
@@ -880,26 +836,6 @@ public:
         }
         return false;
     }
-    
-    /*
-    std::string rotatePrevWaypoint(std::string path){
-        // isolate string for final waypoint in path
-        int size = (int) path.size();
-        int finalStart = size-BSD_PLUS_EXTRA;
-        
-        std::string finalWp = path.substr(finalStart, path.size());
-        // rest of string
-        std::string rest = path.substr(0, path.size()-BSD_PLUS_EXTRA-1);
-        
-        std::cout<<"\nfinalWP: "<<finalWp<<" ("<<finalStart<<", "<<path.size()<<")";
-        std::cout<<"\nrest   : "<<rest;
-        
-        // switch prev waypoint
-        finalWp = switchBsd(finalWp);
-        
-        // reconstruct path string & return
-        return rest + finalWp;
-    }*/
     
     double long calculateHeading(Vector2d prevPos, Vector2d nextPos){
         Vector2d square = Vector2d();
@@ -1022,6 +958,10 @@ public:
             }
             rankHist[r] = rankHist[r] + 1;
         }
+    }
+    
+    void printUniqueStats(){
+        btree.print();
     }
     
     void printStats(){
@@ -1352,6 +1292,10 @@ int main(int argc, const char * argv[]) {
         p.generatePaths();
         std::cout << "paths generated" << std::endl;
         
+        // number of unique paths:
+        //p.printUniqueStats();
+        
+        
         // TESTING CORRUPTED PATHS FOR MATCHES
         std::cout << "corrupt path testing"<< std::endl;
         // pick a random unique path, and store final waypointId of path (this will be used for accuracy)
@@ -1359,7 +1303,7 @@ int main(int argc, const char * argv[]) {
         // to start, I'll just pick a path
         
         // TODO LOOP OVER THIS X TIMES
-        for(int i=0; i < 1; i++){
+        for(int i=0; i < 1000; i++){
             p.distanceAllPaths();
             //p.printStats();
         }
