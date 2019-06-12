@@ -28,23 +28,23 @@
 #define BRD_LEN 50 // number of waypoints in BRD
 #define TOTAL_WAYPOINTS 284 // total number of waypoints entered in text file
 #define MAXLINELEN 100 // maximum length of waypoint data for total waypoints < 1000 (000 00 heading x y 000 000 000....?)
-#define BSDLEN 4 // number of bits in a BSD
-#define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/data/undirected/doors_walls_FBLR/distance2/data_distance2_284_FBLR.txt"
+#define BSDLEN 2 // number of bits in a BSD
+#define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/data/undirected/doors_LR/distance2/data_distance2_284_LR.txt"
 //test datafile
 //#define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/testData5.txt"
 #define TESTDATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/testData5.txt"
 #define OUTPUT "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/histogram_output/output.txt"
 // test mode
 #define TEST_MODE_ACTIVE false
-#define HEADING true // + 3 bits
-#define TWO_BIT_TURN true // + 2 bits
+#define HEADING false // + 3 bits
+#define TWO_BIT_TURN false // + 2 bits
 // Change this depending on turn/heading bits (un)used
 // 0 = no turn info
 // 1 = 1 bit turn info
 // 2 = 2 bit turn info
 // heading is 3 bits: 0-N, 1-NE, 2-E, 3-SE, 4-S, 5-SW, 6-W, 7-NW where
 // N=90, E=0, S=270, W=180
-#define EXTRA_BITS 5 //number of bits added to semantic BSD from turns, heading etc
+#define EXTRA_BITS 0 //number of bits added to semantic BSD from turns, heading etc
 
 // distance stats
 #define LOWER_RANGE 0
@@ -1429,6 +1429,7 @@ int main(int argc, const char * argv[]) {
         //p.printUniqueStats();
         
         
+        /*
         // TESTING CORRUPTED PATHS FOR MATCHES
         std::cout << "corrupt path testing"<< std::endl;
         // pick a random unique path, and store final waypointId of path (this will be used for accuracy)
@@ -1442,7 +1443,7 @@ int main(int argc, const char * argv[]) {
         }
         p.printRankStats();
         // TODO Print total rank stats
-        
+        */
     }
     return 0;
 }
