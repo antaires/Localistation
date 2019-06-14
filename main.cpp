@@ -25,10 +25,10 @@
 #include <map> // for storing unique BRDs and counting how often they occur
 
 // adding to new github
-#define BRD_LEN 50 // number of waypoints in BRD
+#define BRD_LEN 5 // number of waypoints in BRD
 #define TOTAL_WAYPOINTS 284 // total number of waypoints entered in text file
 #define MAXLINELEN 100 // maximum length of waypoint data for total waypoints < 1000 (000 00 heading x y 000 000 000....?)
-#define BSDLEN 2 // number of bits in a BSD
+#define BSDLEN 4 // number of bits in a BSD
 #define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/data/undirected/doors_LR/distance2/data_distance2_284_LR.txt"
 //test datafile
 //#define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/testData5.txt"
