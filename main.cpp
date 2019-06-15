@@ -29,14 +29,14 @@
 #define BRD_LEN 5 // number of waypoints in BRD
 #define TOTAL_WAYPOINTS 282 // total number of waypoints entered in text file
 #define MAXLINELEN 100 // maximum length of waypoint data for total waypoints < 1000 (000 00 heading x y 000 000 000....?)
-#define BSDLEN 4 // number of bits in a BSD
+#define BSDLEN 6 // number of bits in a BSD
 
 // DOORS
 //#define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/data/undirected/doors_LR/distance2/data_distance2_282_LR.txt"
 // DOORS_WALLS
-#define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/data/undirected/doors_walls_FBLR/distance2/data_distance2_282_FBLR.txt"
+//#define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/data/undirected/doors_walls_FBLR/distance2/data_distance2_282_FBLR.txt"
 // DOORS_WALLS_WINDOWS
-//#define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/data/undirected/doors_windows_walls_FBLR/data_distance2_282_FBLR.txt"
+#define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/data/undirected/doors_windows_walls_FBLR/data_distance2_282_FBLR.txt"
 
 //test datafile
 //#define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/testData5.txt"
@@ -44,15 +44,15 @@
 #define OUTPUT "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/histogram_output/output.txt"
 // test mode
 #define TEST_MODE_ACTIVE false
-#define HEADING false // + 3 bits
-#define TWO_BIT_TURN true // + 2 bits
+#define HEADING true // + 3 bits
+#define TWO_BIT_TURN false // + 2 bits
 // Change this depending on turn/heading bits (un)used
 // 0 = no turn info
 // 1 = 1 bit turn info
 // 2 = 2 bit turn info
 // heading is 3 bits: 0-N, 1-NE, 2-E, 3-SE, 4-S, 5-SW, 6-W, 7-NW where
 // N=90, E=0, S=270, W=180
-#define EXTRA_BITS 2 //number of bits added to semantic BSD from turns, heading etc
+#define EXTRA_BITS 3 //number of bits added to semantic BSD from turns, heading etc
 
 // distance stats
 #define LOWER_RANGE 0
@@ -503,22 +503,22 @@ public:
 // ---------------------- //
 class DistanceStats {
 public:
-    int distanceHist[BIT_SIZE] = {0}; //to occurance count distances
+    int distanceHist[BIT_SIZE+1] = {0}; //to occurance count distances
     // array of vectors to hold waypointIds that fall at each distance
-    std::vector<int> waypointIds[BIT_SIZE];
+    std::vector<int> waypointIds[BIT_SIZE+1];
     int correctId;
     int maxDistanceFrequency = 0;
     int rank = -1; // rank of correct id
     DistanceStats(){
         // initialize array of vectors
-        for (int i=0; i < BIT_SIZE; i++){
+        for (int i=0; i < BIT_SIZE+1; i++){
             std::vector<int> row = std::vector<int>(20);
             waypointIds[i] = row;
         }
     }
     
     void reset(){
-        for (int i=0; i < BIT_SIZE; i++){
+        for (int i=0; i < BIT_SIZE+1; i++){
             distanceHist[i] = 0;
             waypointIds[i].clear();
         }
@@ -845,7 +845,8 @@ public:
                         // check for 1st wp or TJunction here, and rotate bsd if needed ->
                         if ( (path.size() == BSD_PLUS_EXTRA) ){
                             // automatically rotates bsd for 1st bit
-                            if ( !HEADING && !TWO_BIT_TURN ){
+                            if ( (!HEADING && !TWO_BIT_TURN) ||
+                                 (!HEADING && TWO_BIT_TURN) ){
                                 // delete last bsd from path (exluding turn info) and re-compute bsd orientation
                                 path = path.substr(0, path.size()-BSDLEN);
                                 double nextHeading = calculateHeading(w.pos, wa.waypointArray[w.conns[i]].pos);
