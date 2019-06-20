@@ -26,7 +26,7 @@
 #include <set>
 
 // adding to new github
-#define BRD_LEN 20 // number of waypoints in BRD
+#define BRD_LEN 25 // number of waypoints in BRD
 #define TOTAL_WAYPOINTS 282 // total number of waypoints entered in text file
 #define MAXLINELEN 100 // maximum length of waypoint data for total waypoints < 1000 (000 00 heading x y 000 000 000....?)
 #define BSDLEN 2 // number of bits in a BSD
@@ -38,7 +38,7 @@
 // DOORS_WALLS_WINDOWS
 //#define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/data/undirected/doors_windows_walls_FBLR/data_distance2_282_FBLR.txt"
 // Unity Test
-//#define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/data/UnityTest/unityTest02.txt"
+//#define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/data/UnityTest/unityTest01.txt"
 
 
 //test datafile
@@ -47,19 +47,19 @@
 #define OUTPUT "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/histogram_output/output.txt"
 // test mode
 #define TEST_MODE_ACTIVE false
-#define HEADING true // + 3 bits
-#define TWO_BIT_TURN true // + 2 bits
+#define HEADING false // + 3 bits
+#define TWO_BIT_TURN false // + 2 bits
 // Change this depending on turn/heading bits (un)used
 // 0 = no turn info
 // 1 = 1 bit turn info
 // 2 = 2 bit turn info
 // heading is 3 bits: 0-N, 1-NE, 2-E, 3-SE, 4-S, 5-SW, 6-W, 7-NW where
 // N=90, E=0, S=270, W=180
-#define EXTRA_BITS 5 //number of bits added to semantic BSD from turns, heading etc
+#define EXTRA_BITS 0 //number of bits added to semantic BSD from turns, heading etc
 
 // distance stats
-#define LOWER_RANGE 5
-#define UPPER_RANGE 15
+#define LOWER_RANGE 1
+#define UPPER_RANGE 10
 #define RANK_STATS_SIZE 11
 
 // don't change
@@ -146,7 +146,7 @@ public:
     Node* current;
     std::vector<SinglePath> allPaths; // TODO potentially pass this as pointer to Paths class
     int statsArray[STATS_ARR_LEN]; // stats array - track how many paths occur 1 - 100 times (lump all others together under 101)
-    
+    int pathCount = 0;
     /*
      // the M is the capacity (8 = 8 bits)
      std::bitset<brdLen> brd(20); // bit sequence initialized to hold bit value of 20
@@ -348,17 +348,15 @@ public:
     }
     
     void printStats(){
-        int totalPaths = 0;
         std::cout<<"\n"<<"STATS: "<<std::endl;
         for (int i = 0; i < STATS_ARR_LEN; i++){
             if (statsArray[i] != 0){
                 std::cout<<"Count "<<std::setw(3)<<i<<" Occurred: "<<statsArray[i]<<std::endl;
-                totalPaths += statsArray[i] * i;
             }
         }
-        std::cout<<"Total paths : "<<totalPaths<<std::endl;
+        std::cout<<"Total paths : "<<pathCount<<std::endl;
         std::cout<<"Unique paths: "<<statsArray[1]<<std::endl;
-        double percentUnique = ((float)statsArray[1] / (float)totalPaths) * 100.0;
+        double percentUnique = ((float)statsArray[1] / (float)pathCount) * 100.0;
         std::cout<<"% Unique    : "<<percentUnique<<std::endl;
     }
     
@@ -809,6 +807,7 @@ class Paths {
 public:
     int len;
     int marker = 0;
+    int pathCount = 0;
     WaypointArray wa;
     BTree btree = BTree();
     //std::stack<Waypoint> stack; // stack for DFS TODO -- not needed if doing recursively
@@ -836,6 +835,9 @@ public:
             buildPath(path, waypointIds, wa.waypointArray[i], wa.waypointArray[i].pos, wa.waypointArray[i].rot, wa.waypointArray[i].rot); // build all paths starting at each waypoint in turn (starting 'prev rot' is just 0)
             wa.unvisitAll(); // clear "visited" bool to start next path
         }
+        // put pathCount somewhere
+        btree.pathCount = pathCount;
+        
         //btree.print();
     }
     
@@ -943,9 +945,12 @@ public:
             std::bitset<(BIT_SIZE)> brd(path); // account for addition of turnBits (BRD_LEN-1)
             btree.addBrd(brd, waypointIds);
             
+            pathCount++;
+            
             // TESTING
             std::cout<<"\nPATH ADDED:";
-            std::cout<<"\n"<<brd<<std::endl;
+            std::cout<<"\n"<<brd;
+            std::cout<<"\ncount: "<<pathCount<<std::endl;
             for(int i=0; i < waypointIds.size(); i++){
                 std::cout<<std::setw(BSD_PLUS_EXTRA)<<waypointIds.at(i);
             } std::cout<<std::endl;
@@ -1613,7 +1618,7 @@ int main(int argc, const char * argv[]) {
         // to start, I'll just pick a path
         
         // FOR CHECKING RANK OF CORRUPTED PATHS
-        /*
+        
         // TODO LOOP OVER THIS X TIMES
         for(int i=0; i < 1000; i++){
             p.distanceAllPaths();
@@ -1626,13 +1631,15 @@ int main(int argc, const char * argv[]) {
         }
         p.printRankStats();
         // TODO Print total rank stats
-        */
         
+        
+        /*
         // FOR FINDING A MATCHING PATH
         // get distance from input BRD string
         std::string testBRD = "00111110011101001111100111110011100001110000111010011101001110000111001010101001010000101000010110001010000101100010110001010000101000010110";
         p.locationMatch(testBRD);
         p.printStats();
+        */
     
     }
     return 0;
