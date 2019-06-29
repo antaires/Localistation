@@ -23,31 +23,44 @@
 #include <stack> // for DFS
 #include <cmath>
 #include <map> // for storing unique BRDs and counting how often they occur
+#include <set>
 
 // adding to new github
-#define BRD_LEN 5 // number of waypoints in BRD
-#define TOTAL_WAYPOINTS 284 // total number of waypoints entered in text file
+#define BRD_LEN 50 // number of waypoints in BRD
+#define TOTAL_WAYPOINTS 282 // total number of waypoints entered in text file
 #define MAXLINELEN 100 // maximum length of waypoint data for total waypoints < 1000 (000 00 heading x y 000 000 000....?)
 #define BSDLEN 4 // number of bits in a BSD
-#define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/data/undirected/doors_LR/distance2/data_distance2_284_LR.txt"
+
+// DOORS
+//#define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/data/undirected/doors_LR/distance2/data_distance2_282_LR.txt"
+// DOORS_WALLS
+//#define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/data/undirected/doors_walls_FBLR/distance2/data_distance2_282_FBLR.txt"
+// DOORS_WALLS_WINDOWS
+//#define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/data/undirected/doors_windows_walls_FBLR/data_distance2_282_FBLR.txt"
+// openings_barriers
+#define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/data/undirected/openings_barriers/data_distance2_282_FBLR.txt"
+// Unity Test
+//#define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/data/UnityTest/unityTest01.txt"
+
+
 //test datafile
 //#define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/testData5.txt"
 #define TESTDATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/testData5.txt"
 #define OUTPUT "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/histogram_output/output.txt"
 // test mode
 #define TEST_MODE_ACTIVE false
-#define HEADING false // + 3 bits
-#define TWO_BIT_TURN false // + 2 bits
+#define HEADING true // + 3 bits
+#define TWO_BIT_TURN true // + 2 bits
 // Change this depending on turn/heading bits (un)used
 // 0 = no turn info
 // 1 = 1 bit turn info
 // 2 = 2 bit turn info
 // heading is 3 bits: 0-N, 1-NE, 2-E, 3-SE, 4-S, 5-SW, 6-W, 7-NW where
 // N=90, E=0, S=270, W=180
-#define EXTRA_BITS 0 //number of bits added to semantic BSD from turns, heading etc
+#define EXTRA_BITS 5 //number of bits added to semantic BSD from turns, heading etc
 
 // distance stats
-#define LOWER_RANGE 0
+#define LOWER_RANGE 1
 #define UPPER_RANGE 10
 #define RANK_STATS_SIZE 11
 
@@ -66,11 +79,14 @@
 class SinglePath {
 public:
     std::bitset<(BIT_SIZE)> path;
-    // TODO store turn path as separate path, or append it to end?
     int id;
+    int distance; // used for curruption distance ranking for elimination
+    int rank; // used for corruption distance ranking for elimination
     SinglePath(std::bitset<(BIT_SIZE)> brd, int waypointId){
         path = brd;
         id = waypointId;
+        rank = -1;
+        distance = -1;
     }
 };
 
@@ -81,7 +97,7 @@ class Node {
 public:
     int bit;
     int count;
-    std::vector <int> waypointIds; // list of waypoints that terminate at this node
+    std::set <int> waypointIds; // list of waypoints that terminate at this node
     Node* left;
     Node* right;
     
@@ -101,19 +117,25 @@ public:
     }
     
     void addWaypointId(int id){
-        waypointIds.push_back(id);
+        // only adds unique waypoint ids
+        waypointIds.insert(id);
     }
     
-    std::vector<int> getWaypointIds(){
+    std::set<int> getWaypointIds(){
         return waypointIds;
     }
     
     void printNode(){
         // print all contents of node to a single line, no new line after
         std::cout<<"||NODE bit:"<<bit<<" cnt:"<<count<<" ids:";
-        for(int i = 0; i < waypointIds.size(); i++){
-            std::cout<<waypointIds.at(i)<<" ";
+        std::set<int> :: iterator itr;
+        for(itr = waypointIds.begin(); itr != waypointIds.end(); itr++){
+            std::cout<<*itr<<" ";
         }
+    }
+    
+    void setCount(){
+        count = (int) waypointIds.size();
     }
 };
 
@@ -126,7 +148,7 @@ public:
     Node* current;
     std::vector<SinglePath> allPaths; // TODO potentially pass this as pointer to Paths class
     int statsArray[STATS_ARR_LEN]; // stats array - track how many paths occur 1 - 100 times (lump all others together under 101)
-    
+    int pathCount = 0;
     /*
      // the M is the capacity (8 = 8 bits)
      std::bitset<brdLen> brd(20); // bit sequence initialized to hold bit value of 20
@@ -172,7 +194,8 @@ public:
                 addBit(brd[i], 0);
             }
         }
-        increaseCurrentCount();
+        // NOT NEEDED - just use count of wp id's
+        //increaseCurrentCount();
         
         // add brd to all paths
         SinglePath singlePath = SinglePath(brd, waypointIds.back());
@@ -207,9 +230,9 @@ public:
         return n;
     }
     
-    void increaseCurrentCount(){
-        current->count++;
-    }
+    //void increaseCurrentCount(){
+    //    current->count = (int) current->waypointIds.size();
+    //}
     
     std::vector<SinglePath> getAllPaths(){
         return allPaths;
@@ -219,13 +242,14 @@ public:
     void print(){
         std::cout<<"\nPRINTING TREE: " << std::endl;
         std::string p = "";
-        printTree(&root, p, BIT_SIZE);
+        std::string wpid = "";
+        printTree(&root, p, wpid, BIT_SIZE);
         printStats();
         //std::cout<<"\nPRINTING TEST TREE: " << std::endl;
         //printTestTree(&root);
     }
     
-    void printTree(Node* n, std::string p, int cnt){
+    void printTree(Node* n, std::string p, std::string wpId, int cnt){
         
         /* NOT WORKING
          // this causes std::cout to write to OUTPUT file rather than terminal
@@ -245,39 +269,59 @@ public:
         if (n->bit != -1){
             p = p + std::to_string(n->bit);
             cnt--;
+            
+            /*
+            // add waypoints to waypoint string
+            std::set<int> :: iterator itr;
+            std::set<int> temp = n->getWaypointIds();
+            for (itr = temp.begin(); itr!= temp.end(); itr++){
+                wpId = wpId + std::to_string(*itr) + " ";
+            } wpId = wpId + " - ";
+            */
         }
         
         if (cnt <= 0){
+            /*
             // loop over waypoint ids to print
             std::cout<<std::endl<<"wpId: ";
-            std::vector<int> temp = n->getWaypointIds();
-            for (int i = 0; i < temp.size(); i++){
-                std::cout<<temp.at(i)<<" ";
+             
+            std::set<int> temp = n->getWaypointIds();
+            std::set<int> :: iterator itr;
+            for (itr = temp.begin(); itr!= temp.end(); itr++){
+                std::cout<<*itr<<" ";
             } std::cout<<std::endl;
-    
-            std::cout <<"path: "<< p << " --:";
+             */
             
-            // print path count
-            std::cout<<std::setw(3)<<n->count;
+            // TESTING
+            //print waypoint string
+            //std::cout<<"\nwpId: "<<wpId<<std::endl;
+            //std::cout <<"path: "<< p << " --:";
+            
+            // print path count --> really, this can just be size of waypointId set
+            //std::cout<<std::setw(3)<<n->count;
+            
+            //std::cout<<std::setw(3)<<n->waypointIds.size();
+           
             // print square symbol for each occurance of path
             //for (int i = n->count; i > 0; i--){
             //    std::cout<<"\u25A0";
             //}
             
-            std::cout<<std::endl;
+            //std::cout<<std::endl;
             // update stats info
-            if (n->count <= 100){
-                statsArray[n->count] = statsArray[n->count] + 1;
+            int count = (int) n->waypointIds.size();
+            if (count <= 100){
+                statsArray[count] = statsArray[count] + 1;
             } else {
                 statsArray[STATS_ARR_LEN-1] = statsArray[STATS_ARR_LEN-1] + 1;
             }
             
         } else {
             if (n->left != NULL) {
-                printTree(n->left, p, cnt);
+                printTree(n->left, p, wpId, cnt);
             }
             if (n->right != NULL) {
-                printTree(n->right, p, cnt);
+                printTree(n->right, p, wpId, cnt);
             }
         }
         
@@ -296,7 +340,7 @@ public:
         if (n->right != NULL){
             n->right->printNode();
         }
-        std::cout<<std::endl;
+        //std::cout<<std::endl;
         if (n->left != NULL) {
             printTestTree(n->left);
         }
@@ -312,9 +356,9 @@ public:
                 std::cout<<"Count "<<std::setw(3)<<i<<" Occurred: "<<statsArray[i]<<std::endl;
             }
         }
-        std::cout<<"Total paths : "<<sumStatsArray()<<std::endl;
+        std::cout<<"Total paths : "<<pathCount<<std::endl;
         std::cout<<"Unique paths: "<<statsArray[1]<<std::endl;
-        double percentUnique = ((float)statsArray[1] / (float)sumStatsArray()) * 100.0;
+        double percentUnique = ((float)statsArray[1] / (float)pathCount) * 100.0;
         std::cout<<"% Unique    : "<<percentUnique<<std::endl;
     }
     
@@ -482,22 +526,22 @@ public:
 // ---------------------- //
 class DistanceStats {
 public:
-    int distanceHist[BIT_SIZE] = {0}; //to occurance count distances
+    int distanceHist[BIT_SIZE+1] = {0}; //to occurance count distances
     // array of vectors to hold waypointIds that fall at each distance
-    std::vector<int> waypointIds[BIT_SIZE];
+    std::vector<int> waypointIds[BIT_SIZE+1];
     int correctId;
     int maxDistanceFrequency = 0;
     int rank = -1; // rank of correct id
     DistanceStats(){
         // initialize array of vectors
-        for (int i=0; i < BIT_SIZE; i++){
+        for (int i=0; i < BIT_SIZE+1; i++){
             std::vector<int> row = std::vector<int>(20);
             waypointIds[i] = row;
         }
     }
     
     void reset(){
-        for (int i=0; i < BIT_SIZE; i++){
+        for (int i=0; i < BIT_SIZE+1; i++){
             distanceHist[i] = 0;
             waypointIds[i].clear();
         }
@@ -517,7 +561,7 @@ public:
         }
     }
     
-    void setRank(){ // TODO how do I deal with TIES? - currently, rank is taken as lower rank of tie
+    void setRank(){ // TIES: - currently, rank is taken as lower rank of tie
         int rankCount = 0;
         int correctIdIndex = 0;
         
@@ -593,7 +637,6 @@ public:
     void setPath(std::bitset<(BIT_SIZE)> path, int correctId){
         distanceStats.setId(correctId);
         corruptPath = path;
-        corrupt25();
     }
     void corrupt25(){
         //std::cout<<"\nCORRUPT: ";
@@ -628,7 +671,8 @@ public:
         //std::cout<<"\ncoPa:"<<corruptPath;
         isCorrupted = true;
     }
-    void hamming(std::bitset<(BIT_SIZE)> path, int id){
+    
+    int hamming(std::bitset<(BIT_SIZE)> path, int id){
         // find hamming distance between corrupt path and input path, and store to DistanceStats
         int distance = 0;
         // compute hamming distance - loop over bits, and add 1 to distance for every different bit
@@ -645,6 +689,36 @@ public:
         //}
         distanceStats.addDistance(distance, id);
         //std::cout<<"hamming distance: "<<distance<<std::endl;
+        
+        return distance;
+    }
+    
+    int hammingLimit(int limit, std::bitset<(BIT_SIZE)> path, int id){
+        // find hamming distance between corrupt path and input path, and store to DistanceStats
+        int distance = 0;
+        // compute hamming distance - loop over bits, and add 1 to distance for every different bit
+        // use XOR so:
+        // 0 ^ 0 = 0
+        // 1 ^ 0 = 1
+        // 0 ^ 1 = 1
+        // 1 ^ 1 = 0
+        
+        /* TODO
+        std::bitset<(limit)> corruptPathLimit = ;
+        std::bitset<(limit)> pathLimit = ;
+        
+        
+        distance = (int)(corruptPathLimit ^ pathLimit).count();
+        //for (int i = (BRD_LEN*BSDLEN)-1; i >= 0; i--){ // not in reverse, but for binary, 0 starst on far right
+        //    if (corruptPath[i] ^ path[i]){
+        //        distance++;
+        //   }
+        //}
+        */
+        
+        //distanceStats.addDistance(distance, id);
+        //std::cout<<"hamming distance: "<<distance<<std::endl;
+        return distance;
     }
     
     void levenshtein(){
@@ -703,16 +777,44 @@ public:
 };
 
 // ---------------------- //
+// ------ DISTANCE ------ //
+// ---------------------- //
+class Distance {
+public:
+    
+    int hamming(std::bitset<(BIT_SIZE)> path1, std::bitset<(BIT_SIZE)> path2){
+        // find hamming distance between corrupt path and input path, and store to DistanceStats
+        int distance = 0;
+        // compute hamming distance - loop over bits, and add 1 to distance for every different bit
+        // use XOR so:
+        // 0 ^ 0 = 0
+        // 1 ^ 0 = 1
+        // 0 ^ 1 = 1
+        // 1 ^ 1 = 0
+        distance = (int)(path1 ^ path2).count();
+        //for (int i = (BRD_LEN*BSDLEN)-1; i >= 0; i--){ // not in reverse, but for binary, 0 starst on far right
+        //    if (corruptPath[i] ^ path[i]){
+        //        distance++;
+        //   }
+        //}
+        return distance;
+    }
+};
+
+
+// ---------------------- //
 // ------ PATHS --------- //
 // ---------------------- //
 class Paths {
 public:
     int len;
     int marker = 0;
+    int pathCount = 0;
     WaypointArray wa;
     BTree btree = BTree();
     //std::stack<Waypoint> stack; // stack for DFS TODO -- not needed if doing recursively
     CorruptPath cPath = CorruptPath();
+    Distance distance = Distance();
     int rankHist[RANK_STATS_SIZE] = {0}; // 1-10 are true counts, 11 is everything else over 10
     
     Paths (int l, WaypointArray *warr){ // construct with desired length, waypoint array, and stats array
@@ -735,7 +837,10 @@ public:
             buildPath(path, waypointIds, wa.waypointArray[i], wa.waypointArray[i].pos, wa.waypointArray[i].rot, wa.waypointArray[i].rot); // build all paths starting at each waypoint in turn (starting 'prev rot' is just 0)
             wa.unvisitAll(); // clear "visited" bool to start next path
         }
-        btree.print();
+        // put pathCount somewhere
+        btree.pathCount = pathCount;
+        
+        //btree.print();
     }
     
     void buildPath(std::string path, std::vector<int> waypointIds, Waypoint w, Vector2d prevPos, double prevRot, double prevHeading){
@@ -755,6 +860,8 @@ public:
             // add turn bit -- added BEFORE w BSD, since turn determined w/ prevPos to this wp
             // 2 bits (00=no turn, 10=left, 01=right, 11=not used)
             std::string turnBit;
+            
+            // TODO -> actually, sometimes first bits can be a turn...but okay if all meet at edges
             if (path.size() <= BSDLEN + 2){
                 turnBit = "00"; // no turns for first 2 waypoints, as it will always be a straight line
             } else {
@@ -795,7 +902,8 @@ public:
                         // check for 1st wp or TJunction here, and rotate bsd if needed ->
                         if ( (path.size() == BSD_PLUS_EXTRA) ){
                             // automatically rotates bsd for 1st bit
-                            if ( !HEADING && !TWO_BIT_TURN ){
+                            if ( (!HEADING && !TWO_BIT_TURN) ||
+                                 (!HEADING && TWO_BIT_TURN) ){
                                 // delete last bsd from path (exluding turn info) and re-compute bsd orientation
                                 path = path.substr(0, path.size()-BSDLEN);
                                 double nextHeading = calculateHeading(w.pos, wa.waypointArray[w.conns[i]].pos);
@@ -832,18 +940,23 @@ public:
         // path has reached limit add to tree if long enough
         if (path.length() == BIT_SIZE){
             
+            // check if final BSD needs to rotate
+            
+            
             // convert string to bit
             std::bitset<(BIT_SIZE)> brd(path); // account for addition of turnBits (BRD_LEN-1)
             btree.addBrd(brd, waypointIds);
             
+            pathCount++;
+            
             // TESTING
-            /*
             std::cout<<"\nPATH ADDED:";
-            std::cout<<"\n"<<brd<<std::endl;
+            std::cout<<"\n"<<brd;
+            std::cout<<"\ncount: "<<pathCount<<std::endl;
             for(int i=0; i < waypointIds.size(); i++){
-                std::cout<<"   "<<waypointIds.at(i);
+                std::cout<<std::setw(BSD_PLUS_EXTRA)<<waypointIds.at(i);
             } std::cout<<std::endl;
-            */
+            
             if (TEST_MODE_ACTIVE){
                 testData5(path, waypointIds);
             }
@@ -882,7 +995,7 @@ public:
         if ( (diff == 0) || (diff <= 90 && diff >= 0) || (diff >= 270 && diff <= 360) ){
             return w.bsd;
         }
-        //std::cout<<"\n---RETRO ROTATE---";
+        //std::cout<<"\nwp:"<<w.id<<" RETRO rotate:";
         return switchBsd(w.bsd);
     }
     
@@ -901,6 +1014,9 @@ public:
         square.x = (nextPos.x - prevPos.x);
         square.y = (nextPos.y - prevPos.y);
         double long heading = atan2(square.y, square.x);
+        
+        //std::cout<<"\ncalcHeading: prevPos("<<prevPos.x<<", "<<prevPos.y<<") nextPos:(";
+        //std::cout<<nextPos.x<<", "<<nextPos.y<<") heading:"<<heading;
         
         if (heading >=0 ){
             heading = heading * 360/(2*M_PI);
@@ -951,11 +1067,13 @@ public:
     
     std::string rotateWaypoint(Waypoint w, double heading, bool* hasRotated){
         double diff = abs(constrain(w.rot) - heading);
+        //std::cout<<"\nrotateWp() called: wp:"<<w.id<<" wpRot:"<<w.rot<<" heading:"<<heading;
         if ( (diff == 0) || (diff <= 90 && diff >= 0) || (diff >= 270 && diff <= 360) ){
             *hasRotated = false;
             return w.bsd;
         }
         *hasRotated = true;
+        //std::cout<<" ROTATED";
         return switchBsd(w.bsd);
     }
     
@@ -965,6 +1083,7 @@ public:
         if (BSDLEN == 2){
             newBsd = bsd[1];
             newBsd = newBsd + bsd[0];
+            //std::cout<<" bsd:"<<newBsd;
             return newBsd;
         } else if (BSDLEN == 6){ //TODO do this with bits, then convert to string it would be faster
             // assumes FB - L(d/w) - R(d/w)
@@ -990,6 +1109,7 @@ public:
     void corruptPath(std::bitset<(BIT_SIZE)> pathToCorrupt, int correctId){
         //std::cout<<"uncorrupted:"<<pathToCorrupt<<std::endl;
         cPath.setPath(pathToCorrupt, correctId);
+        cPath.corrupt25();
         //cPath.printPath();
     }
     
@@ -1016,6 +1136,36 @@ public:
                 r = RANK_STATS_SIZE -1;
             }
             rankHist[r] = rankHist[r] + 1;
+        }
+    }
+    
+    void distanceElimination(){
+        // set all used values to 0
+        reset();
+        
+        // loop over tree, and calculate distance between corruptPath and all other paths
+        std::vector<SinglePath> allPaths = btree.getAllPaths();
+        
+        // pick 1 path randomly as target path, corrupt it and save it as cPath.corruptPath
+        if (!allPaths.empty()){
+            int index = rand() % allPaths.size();
+            corruptPath(allPaths.at(index).path, allPaths.at(index).id);
+        }
+        
+        // for waypoints length 5, 10, 15....up to max
+        int wpLen[10] = {5, 10, 15, 20, 25, 30, 35, 40, 45, 50};
+        for (int i=0; i < 10; i++){
+            
+            // get distances for limited BRD (wp 5, 10, 15...etc)
+            for(int i=0; i < allPaths.size(); i++){
+                allPaths.at(i).distance = cPath.hammingLimit(wpLen[i], allPaths.at(i).path, allPaths.at(i).id);
+            }
+            
+            // rank 10 closest (or more for ties) paths
+            
+            // eliminate all but rank 1 - 10 paths
+            
+            // print out rank of correct path
         }
     }
     
@@ -1050,9 +1200,45 @@ public:
         
         percentRank1 = ((float)firstRankTotal / (float)nonFirstRankTotal) * 100.0;
         std::cout<<"\n1st rank count: "<<firstRankTotal<<std::endl;
-        std::cout<<"all other ranks: "<<nonFirstRankTotal<<std::endl;
+        std::cout<<"all other ranks: "<<nonFirstRankTotal - firstRankTotal <<std::endl;
         std::cout<<"\nFirst rank %: "<<percentRank1<<std::endl;
         std::cout<<std::endl;
+    }
+    
+    void locationMatch(std::string brd){
+        // set all used values to 0
+        reset();
+        
+        // loop over tree, and calculate distance between corruptPath and all other paths
+        std::vector<SinglePath> allPaths = btree.getAllPaths();
+        
+        // create SinglePath from input brd
+        std::bitset<BIT_SIZE> bitBrd(brd);
+        SinglePath brdPath = SinglePath(bitBrd, -1);
+        std::cout<<"\nPath: "<<brd;
+        std::cout<<"\nPATH: "<<brdPath.path<<std::endl;
+        
+        cPath.setPath(brdPath.path, -1);
+        
+        // generate distance between brd and all paths
+        if (!allPaths.empty()){
+            
+            for(int i=0; i < allPaths.size(); i++){
+                allPaths.at(i).distance = cPath.hamming(allPaths.at(i).path, allPaths.at(i).id);
+                //std::cout<<"\nwp: "<<allPaths.at(i).id<<" - Hamming distance: "<<allPaths.at(i).distance;
+            }
+            
+            // rank correct id and store information in another histogram
+            cPath.setRank();
+            int r = cPath.getRank();
+            if (r > RANK_STATS_SIZE -1 ){
+                r = RANK_STATS_SIZE -1;
+            }
+            rankHist[r] = rankHist[r] + 1;
+        }
+        // return location guess(es) of 1st rank matches
+        
+        
     }
     
     // ---------------------- //
@@ -1404,7 +1590,6 @@ int main(int argc, const char * argv[]) {
          */
         // print info for file
         std::cout<<"Number of waypoints: "<<BRD_LEN<<std::endl;
-        //std::cout<<"Number of bits in BRD: "<<BRD_LEN * BSDLEN <<std::endl;
         std::cout<<"Number of bits: "<<BRD_LEN * (BSDLEN + EXTRA_BITS) <<std::endl;
         std::cout<<"Total number of waypoints: "<<TOTAL_WAYPOINTS<<std::endl;
         std::cout<<"data file: "<<DATAFILE<<std::endl<<std::endl;;
@@ -1426,24 +1611,38 @@ int main(int argc, const char * argv[]) {
         std::cout << "paths generated" << std::endl;
         
         // number of unique paths:
-        //p.printUniqueStats();
+        p.printUniqueStats();
         
-        
-        /*
         // TESTING CORRUPTED PATHS FOR MATCHES
         std::cout << "corrupt path testing"<< std::endl;
         // pick a random unique path, and store final waypointId of path (this will be used for accuracy)
         // could randomly pick one while generating tree?
         // to start, I'll just pick a path
         
+        // FOR CHECKING RANK OF CORRUPTED PATHS
+        
         // TODO LOOP OVER THIS X TIMES
         for(int i=0; i < 1000; i++){
             p.distanceAllPaths();
             //p.printStats();
+            
+            // elimination - start with max wp length and generate paths
+            // then, this tests accuracy of 5 wp (elimantes most paths) and uses this reduced set of paths
+            // to then check for 10 wp match (repeat with 15, 20, ...etc).
+            //p.distanceElimination();
         }
         p.printRankStats();
         // TODO Print total rank stats
+        
+        
+        /*
+        // FOR FINDING A MATCHING PATH
+        // get distance from input BRD string
+        std::string testBRD = "00111110011101001111100111110011100001110000111010011101001110000111001010101001010000101000010110001010000101100010110001010000101000010110";
+        p.locationMatch(testBRD);
+        p.printStats();
         */
+    
     }
     return 0;
 }
