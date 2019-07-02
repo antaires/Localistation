@@ -26,11 +26,18 @@
 #include <set>
 
 // adding to new github
-#define BRD_LEN 50 // number of waypoints in BRD
-#define TOTAL_WAYPOINTS 282 // total number of waypoints entered in text file
+#define BRD_LEN 3 // number of waypoints in BRD
+#define TOTAL_WAYPOINTS 569 // total number of waypoints entered in text file (MAX expected number)
 #define MAXLINELEN 100 // maximum length of waypoint data for total waypoints < 1000 (000 00 heading x y 000 000 000....?)
 #define BSDLEN 4 // number of bits in a BSD
+// for localisation
+#define DISTANCE 1 // # of waypoints to skip
 
+// DISTANCE 1
+// openings_barriers
+#define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/data/undirected/openings_barriers/distance1/data_distance1_569_FBLR.txt"
+
+// DISTANCE 2
 // DOORS
 //#define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/data/undirected/doors_LR/distance2/data_distance2_282_LR.txt"
 // DOORS_WALLS
@@ -38,10 +45,9 @@
 // DOORS_WALLS_WINDOWS
 //#define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/data/undirected/doors_windows_walls_FBLR/data_distance2_282_FBLR.txt"
 // openings_barriers
-#define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/data/undirected/openings_barriers/data_distance2_282_FBLR.txt"
+//#define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/data/undirected/openings_barriers/distance2/data_distance2_282_FBLR.txt"
 // Unity Test
 //#define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/data/UnityTest/unityTest01.txt"
-
 
 //test datafile
 //#define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/testData5.txt"
@@ -834,7 +840,7 @@ public:
             std::vector<int> waypointIds; // to track waypoint id's along path
             wa.waypointArray[i].visited = true;
             
-            buildPath(path, waypointIds, wa.waypointArray[i], wa.waypointArray[i].pos, wa.waypointArray[i].rot, wa.waypointArray[i].rot); // build all paths starting at each waypoint in turn (starting 'prev rot' is just 0)
+            buildPath(path, waypointIds, wa.waypointArray[i], wa.waypointArray[i].pos, wa.waypointArray[i].rot, wa.waypointArray[i].rot, DISTANCE); // build all paths starting at each waypoint in turn (starting 'prev rot' is just 0)
             wa.unvisitAll(); // clear "visited" bool to start next path
         }
         // put pathCount somewhere
@@ -843,7 +849,11 @@ public:
         //btree.print();
     }
     
-    void buildPath(std::string path, std::vector<int> waypointIds, Waypoint w, Vector2d prevPos, double prevRot, double prevHeading){
+    void buildPath(std::string path, std::vector<int> waypointIds, Waypoint w, Vector2d prevPos, double prevRot, double prevHeading, int distance){
+        
+        // TESTING
+        std::cout<<"\ndistance: "<<distance<<" wp:"<<w.id<<" ";
+        
         w.visited = true;
         bool hasRotated = false;
         // access w.pos for current position
@@ -855,43 +865,62 @@ public:
             heading = calculateHeading(prevPos, w.pos); // (prevPos, nextPos)
         }
         
-        // add turn bits, heading bits, and rotate BSD if needed:
-        if (TWO_BIT_TURN){
-            // add turn bit -- added BEFORE w BSD, since turn determined w/ prevPos to this wp
-            // 2 bits (00=no turn, 10=left, 01=right, 11=not used)
-            std::string turnBit;
-            
-            // TODO -> actually, sometimes first bits can be a turn...but okay if all meet at edges
-            if (path.size() <= BSDLEN + 2){
-                turnBit = "00"; // no turns for first 2 waypoints, as it will always be a straight line
-            } else {
-                //std::string turnBit = determineTurnBit(prevRot, w.rot);
-                turnBit = determineTurnBit2(prevHeading, heading);
+        // only add wp IF distance is correct
+        if (distance == DISTANCE){
+            std::cout<<" added wp:"<<w.id;
+            // add turn bits, heading bits, and rotate BSD if needed:
+            if (TWO_BIT_TURN){
+                // add turn bit -- added BEFORE w BSD, since turn determined w/ prevPos to this wp
+                // 2 bits (00=no turn, 10=left, 01=right, 11=not used)
+                std::string turnBit;
+                
+                // TODO -> actually, sometimes first bits can be a turn...but okay if all meet at edges
+                if (path.size() <= BSDLEN + 2){
+                    turnBit = "00"; // no turns for first 2 waypoints, as it will always be a straight line
+                } else {
+                    //std::string turnBit = determineTurnBit(prevRot, w.rot);
+                    turnBit = determineTurnBit2(prevHeading, heading);
+                }
+                path = path + turnBit;
             }
-            path = path + turnBit;
-        }
-        if (HEADING){
-            // added after turn bit (if exists) and BEFORE bsd
-            std::string headingBit = setHeadingBit(heading);
-            path = path + headingBit;
-        }
-        if (DIRECTED){
-            path = path + w.bsd;
-        } else { // not directed
-            //path = path + rotateTurn(turnBit, w.rot, heading) + rotateWaypoint(w, heading);
-            // don't need to rotate turn bits, because calculation handles that already
-            path = path + rotateWaypoint(w, heading, &hasRotated);
+            
+            if (HEADING){
+                // added after turn bit (if exists) and BEFORE bsd
+                std::string headingBit = setHeadingBit(heading);
+                path = path + headingBit;
+            }
+            if (DIRECTED){
+                path = path + w.bsd;
+            } else { // not directed
+                //path = path + rotateTurn(turnBit, w.rot, heading) + rotateWaypoint(w, heading);
+                // don't need to rotate turn bits, because calculation handles that already
+                path = path + rotateWaypoint(w, heading, &hasRotated);
+            }
+            
+            // add waypointId to vector of ids
+            waypointIds.push_back(w.id);
+            
+            // TESTING
+            std::cout<<"\nPATH:";
+            std::cout<<path<<" ";
+            for(int i=0; i < waypointIds.size(); i++){
+                std::cout<<std::setw(BSD_PLUS_EXTRA)<<waypointIds.at(i);
+            } std::cout<<std::endl;
         }
         
-        // add waypointId to vector of ids
-        waypointIds.push_back(w.id);
+        // potentially only do this if ... ?
+        // TODO incorrect distance count for connections ...
+        distance = decreaseDistance(distance);
         
         // check for connections if path length not reached yet
-        if (path.length() < BIT_SIZE){ //
+        if (path.length() < BIT_SIZE){
+            
             // check every connection
             for(int i = 0; i < w.conns.size(); i++){
+                
                 // if connection has not been visited yet, visit it
                 if (!(wa.waypointArray[w.conns[i]].visited)){
+                    
                     // need to pass in previous position to calculate heading
                     
                     wa.waypointArray[w.conns[i]].visited = true; // prevent loops
@@ -930,8 +959,9 @@ public:
                     }
                     
                     // path, waypointIds, w, prevPos, prevRot, prevHeading, )
-                    buildPath(path, waypointIds, wa.waypointArray[w.conns[i]], w.pos, w.rot, heading); // recursive call to continue building path
+                    buildPath(path, waypointIds, wa.waypointArray[w.conns[i]], w.pos, w.rot, heading, distance); // recursive call to continue building path
                     hasRotated = false;
+                    
                     wa.waypointArray[w.conns[i]].visited = false; // allows all connections to be attempted (1 connection may lead to multiple possible paths)
                 }
             }
@@ -961,6 +991,14 @@ public:
                 testData5(path, waypointIds);
             }
         }
+    }
+    
+    int decreaseDistance(int distance){
+        distance -= 1;
+        if (distance < 0){
+            distance = DISTANCE;
+        }
+        return distance;
     }
     
     std::string setHeadingBit(double heading){
