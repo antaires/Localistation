@@ -27,7 +27,7 @@
 
 // adding to new github
 #define BRD_LEN 3 // number of waypoints in BRD
-#define TOTAL_WAYPOINTS 569 // total number of waypoints entered in text file (MAX expected number)
+#define TOTAL_WAYPOINTS 567 // total number of waypoints entered in text file (MAX expected number)
 #define MAXLINELEN 100 // maximum length of waypoint data for total waypoints < 1000 (000 00 heading x y 000 000 000....?)
 #define BSDLEN 4 // number of bits in a BSD
 // for localisation
@@ -35,7 +35,7 @@
 
 // DISTANCE 1
 // openings_barriers
-#define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/data/undirected/openings_barriers/distance1/data_distance1_569_FBLR.txt"
+#define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/data/undirected/openings_barriers/distance1/data_distance1_567_FBLR.txt"
 
 // DISTANCE 2
 // DOORS
