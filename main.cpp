@@ -85,6 +85,7 @@
 class SinglePath {
 public:
     std::bitset<(BIT_SIZE)> path;
+    std::vector<int> waypointIds;
     int id;
     int distance; // used for curruption distance ranking for elimination
     int rank; // used for corruption distance ranking for elimination
@@ -453,6 +454,21 @@ public:
 };
 
 // ---------------------- //
+// --- Sensor         --- //
+// ---------------------- //
+class Sensor {
+public:
+    int id;
+    std::string bsd;
+    std::string h;
+    std::string t;
+    double fd;
+    double bd;
+    double ld;
+    double rd;
+};
+
+// ---------------------- //
 // --- data processing--- //
 // ---------------------- //
 // converts file to string, extracts line info, creates waypoints, and stores them to array
@@ -461,6 +477,7 @@ public:
     std::string fileName;
     std::string line;
     std::vector<std::string> stringArray;
+    std::vector<Sensor> *route;
     
     DataProcessing (std::string fn){
         fileName = fn;
@@ -511,6 +528,89 @@ public:
         }
         
         ifs.close(); // close the file
+    }
+    
+    // for opening route.txt and classifier.txt
+    void buildRoute (std::string routeFile, std::string classifierFile) {
+        std::ifstream ifsR; // open files in read mode
+        std::ifstream ifsC;
+        
+        ifsR.open(routeFile);
+        std::string bufR;
+        
+        ifsC.open(classifierFile);
+        std::string bufC;
+        
+        // safety check
+        if (!ifsR){
+            std::cout << "ERROR: cannot open route file";
+            exit(1);
+        } else if (!ifsC){
+            std::cout << "ERROR: cannot open classifier file";
+            exit(1);
+        }
+        
+        //  ACCESS ROUTE FILE CONTENTS
+        // each line is a new sensor
+        getline(ifsR, line);
+        while (ifsR) { // loop through file line by line
+            int wordCount = 0;
+            // ACCESS WORDS IN STRING
+            bufR = "";
+            std::stringstream ss(line);
+            // create sensor from words
+            Sensor s;
+            while(ss >> bufR){
+                if (wordCount == 0){
+                    s.id = stringToInt(bufR);
+                } else if (wordCount == 1){
+                    s.h = bufR;
+                } else if (wordCount == 2){
+                    s.t = bufR;
+                } else if (wordCount == 3){
+                    s.fd = stringToDouble(bufR);
+                } else if (wordCount == 4){
+                    s.bd = stringToDouble(bufR);
+                } else if (wordCount == 5){
+                    s.ld = stringToInt(bufR);
+                } else if (wordCount == 6){
+                    s.rd = stringToInt(bufR);
+                }
+                wordCount++;
+            }
+            //w.print(); // TESTING prints each waypoint information
+            
+            // STORE NEW SENSOR IN ARRAY, INDEXED BY WAYPOINT ID
+            route->push_back(s); // TODO confirm correct sensor id = index
+            
+            getline(ifsR, line);  // get next line if exists
+        }
+        
+        //  ACCESS FILE CONTENTS
+        // add bsd to sensors by index (sensor id == vector index
+        getline(ifsC, line);
+        int index = 0;
+        while (ifsC) { // loop through file line by line
+            int wordCount = 0;
+            // ACCESS WORDS IN STRING
+            bufC = "";
+            std::stringstream ss(line);
+
+            while(ss >> bufC){
+                if (wordCount == 0){
+                    route->at(index++).bsd = bufC;
+                wordCount++;
+                }
+            }
+            //w.print(); // TESTING prints each waypoint information
+            
+            getline(ifsC, line);  // get next line if exists
+        }
+        
+        ifsR.close(); // close the file
+        ifsC.close();
+        
+        // TODO return the sensor vector (perhaps pass it in as a pointer
     }
     
     int stringToInt(std::string str){
@@ -824,6 +924,9 @@ public:
     Distance distance = Distance();
     int rankHist[RANK_STATS_SIZE] = {0}; // 1-10 are true counts, 11 is everything else over 10
     
+    //for finding the best match and returning waypoint sequence
+    std::vector<SinglePath> allPaths;
+    
     Paths (int l, WaypointArray *warr){ // construct with desired length, waypoint array, and stats array
         len = l;
         wa = *warr;
@@ -853,7 +956,7 @@ public:
     void buildPath(std::string path, std::vector<int> waypointIds, Waypoint w, Vector2d prevPos, double prevRot, double prevHeading, int distance, std::string storedTurn, double storedHeading){
         
         // TESTING
-        std::cout<<"\ndistance: "<<distance<<" wp:"<<w.id<<" ";
+        //std::cout<<"\ndistance: "<<distance<<" wp:"<<w.id<<" ";
         
         w.visited = true;
         bool hasRotated = false;
@@ -867,11 +970,11 @@ public:
         }
         
         // TESTING
-        std::cout<<" H:"<<setHeadingBit(heading)<<" ";
+        //std::cout<<" H:"<<setHeadingBit(heading)<<" ";
         
         // only add wp IF distance is correct
         if (distance == DISTANCE){
-            std::cout<<" added wp:"<<w.id;
+            //std::cout<<" added wp:"<<w.id;
             // add turn bits, heading bits, and rotate BSD if needed:
             if (TWO_BIT_TURN){
                 // add turn bit -- added BEFORE w BSD, since turn determined w/ prevPos to this wp
@@ -915,12 +1018,14 @@ public:
             // add waypointId to vector of ids
             waypointIds.push_back(w.id);
             
+            /*
             // TESTING
             std::cout<<"\nPATH:";
             std::cout<<path<<" ";
             for(int i=0; i < waypointIds.size(); i++){
                 std::cout<<std::setw(BSD_PLUS_EXTRA)<<waypointIds.at(i);
             } std::cout<<std::endl;
+             */
             
         } else {
             // it is a wp being skipped:  calculate storedTurn bit ONLY if it is "00"
@@ -938,7 +1043,7 @@ public:
                 storedHeading = heading;
                 
                 // TESTING
-                std::cout<<" DH:"<<setHeadingBit(storedHeading)<<" ";
+                //std::cout<<" DH:"<<setHeadingBit(storedHeading)<<" ";
             }
         }
         
@@ -964,7 +1069,7 @@ public:
                         if ( (path.size() == BSD_PLUS_EXTRA) ){
                             
                             //TESTING
-                            std::cout<<"-RETRO-";
+                            //std::cout<<"-RETRO-";
                             
                             double nextHeading = 0.0;
                             if (DISTANCE == 0){
@@ -1014,12 +1119,17 @@ public:
             
             // check if final BSD needs to rotate
             
-            
             // convert string to bit
             std::bitset<(BIT_SIZE)> brd(path); // account for addition of turnBits (BRD_LEN-1)
             btree.addBrd(brd, waypointIds);
             
             pathCount++;
+            
+            //add path to allPaths
+            std::bitset<BIT_SIZE> bitPath(path);
+            SinglePath newPath = SinglePath(bitPath, waypointIds.back());
+            newPath.waypointIds = waypointIds;
+            allPaths.push_back(newPath);
             
             // TESTING
             std::cout<<"\nPATH ADDED:";
@@ -1325,9 +1435,48 @@ public:
             rankHist[r] = rankHist[r] + 1;
         }
         // return location guess(es) of 1st rank matches
-        
-        
     }
+    
+    // ---------------------- //
+    // ---- BEST MATCH   ---- //
+    // ---------------------- //
+    std::string bestMatch(std::string testPath){
+        // TODO for now prints to console, will later output a string to write to file
+        std::bitset<BIT_SIZE> bitPath(testPath);
+        Distance d = Distance();
+        std::string bestMatchString = "";
+        
+        int lowestDistance = BIT_SIZE; // highest possible distance to start
+        int bestMatch = 0; // index of best path
+        
+        // loop over all paths in allPaths vector
+        for (int i=0; i < allPaths.size(); i++){
+            // get hamming distance between testPath and all paths
+            int distance = d.hamming( allPaths.at(i).path, bitPath);
+            //save lowest distance
+            if (distance < lowestDistance){
+                lowestDistance = distance;
+                bestMatch = i;
+            }
+            // if distance is 0 (it wont ever be but just in case) stop process
+            if (lowestDistance == 0){
+                i = (int) allPaths.size();
+            }
+        }
+        
+        //return wp sequence for best match
+        //std::cout<<allPaths.at(bestMatch).path;
+        for(int i=0; i < allPaths.at(bestMatch).waypointIds.size(); i++){
+            //std::cout<<std::setw(BSD_PLUS_EXTRA)<<allPaths.at(bestMatch).waypointIds.at(i);
+            bestMatchString = bestMatchString + std::to_string(allPaths.at(bestMatch).waypointIds.at(i)) + " ";
+        } //std::cout<<std::endl;
+        
+        //std::bitset<(BIT_SIZE)> path;
+        //std::vector<int> waypointIds;
+        
+        return bestMatchString;
+    }
+    
     
     // ---------------------- //
     // ---- PATH TESTING ---- //
@@ -1649,6 +1798,9 @@ int main(int argc, const char * argv[]) {
     
     srand((unsigned int)time(0));
     
+    std::ofstream locFile; // a file to store all output
+    locFile.open("/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/output/output.txt");
+    
     if (TEST_MODE_ACTIVE){
         std::cout<<"\nTEST MODE ACTIVE"<<std::endl;
         
@@ -1699,10 +1851,10 @@ int main(int argc, const char * argv[]) {
         std::cout << "paths generated" << std::endl;
         
         // number of unique paths:
-        p.printUniqueStats();
+        //p.printUniqueStats();
         
         // TESTING CORRUPTED PATHS FOR MATCHES
-        std::cout << "corrupt path testing"<< std::endl;
+        //std::cout << "corrupt path testing"<< std::endl;
         // pick a random unique path, and store final waypointId of path (this will be used for accuracy)
         // could randomly pick one while generating tree?
         // to start, I'll just pick a path
@@ -1710,33 +1862,55 @@ int main(int argc, const char * argv[]) {
         // FOR CHECKING RANK OF CORRUPTED PATHS
         
         // TODO LOOP OVER THIS X TIMES
-        for(int i=0; i < 1000; i++){
-            p.distanceAllPaths();
+        //for(int i=0; i < 1000; i++){
+        //    p.distanceAllPaths();
             //p.printStats();
             
             // elimination - start with max wp length and generate paths
             // then, this tests accuracy of 5 wp (elimantes most paths) and uses this reduced set of paths
             // to then check for 10 wp match (repeat with 15, 20, ...etc).
             //p.distanceElimination();
-        }
-        p.printRankStats();
+        //}
+        
+        //p.printRankStats();
         // TODO Print total rank stats
-        
-         
-         // TODO
-         // 1. read in route.txt and classifier.txt (this will become a loop)
-         // - build BRD
-         
-         // 2. find best wp match
-        // FOR FINDING A MATCHING PATH
-        // get distance from input BRD string
-        std::string testBRD = "001000110101010110101010110101000110100110110100110110100110110100110110100110110100110110100110110100110110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110";
-        p.locationMatch(testBRD);
-        p.printStats();
-         
-        //3. and write it to file (1st, just print to console)
-        
     
+        
+         // TODO
+        // open routes, and loop over folders: (0, 1, 2..., etc)
+         // 1. read in route.txt and classifier.txt (this will become a loop)
+            // - build BRD
+            std::vector<Sensor> route;
+            dp.route = &route;
+        
+            std::string routeFile = "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/routes/0/route.txt";
+            std::string classifierFile = "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/routes/0/classifier.txt";
+            dp.buildRoute (routeFile, classifierFile);
+
+        
+            // get route i from route;
+            // TODO make a class to take sensor vector, and build brd
+                
+            // 2. find best wp match
+            // FOR FINDING A MATCHING PATH
+            std::string testBRD = "001000110101010110101010110101000110100110110100110110100110110100110110100110110100110110100110110100110110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110";
+        
+            std::string matchWaypointString = p.bestMatch(testBRD);
+        
+            // for now, print to console
+            std::cout<<"\nbest match: "<<std::endl;
+            std::cout<<matchWaypointString<<std::endl;
+        
+            // print this to get rank info:
+            //p.locationMatch(testBRD);
+            //p.printStats();
+         
+            //3. write it to file (1st, just print to console)
+            locFile << matchWaypointString << std::endl;
+        
+        
+        locFile.close();
+        
     }
     return 0;
 }
