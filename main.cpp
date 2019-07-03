@@ -55,15 +55,15 @@
 #define OUTPUT "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/histogram_output/output.txt"
 // test mode
 #define TEST_MODE_ACTIVE false
-#define HEADING false // + 3 bits
-#define TWO_BIT_TURN true // + 2 bits
+#define HEADING true // + 3 bits
+#define TWO_BIT_TURN false // + 2 bits
 // Change this depending on turn/heading bits (un)used
 // 0 = no turn info
 // 1 = 1 bit turn info
 // 2 = 2 bit turn info
 // heading is 3 bits: 0-N, 1-NE, 2-E, 3-SE, 4-S, 5-SW, 6-W, 7-NW where
 // N=90, E=0, S=270, W=180
-#define EXTRA_BITS 2 //number of bits added to semantic BSD from turns, heading etc
+#define EXTRA_BITS 3 //number of bits added to semantic BSD from turns, heading etc
 
 // distance stats
 #define LOWER_RANGE 1
@@ -840,7 +840,7 @@ public:
             std::vector<int> waypointIds; // to track waypoint id's along path
             wa.waypointArray[i].visited = true;
             
-            buildPath(path, waypointIds, wa.waypointArray[i], wa.waypointArray[i].pos, wa.waypointArray[i].rot, wa.waypointArray[i].rot, DISTANCE, "00"); // build all paths starting at each waypoint in turn (starting 'prev rot' is just 0)
+            buildPath(path, waypointIds, wa.waypointArray[i], wa.waypointArray[i].pos, wa.waypointArray[i].rot, wa.waypointArray[i].rot, DISTANCE, "00", 0.0); // build all paths starting at each waypoint in turn (starting 'prev rot' is just 0)
             wa.unvisitAll(); // clear "visited" bool to start next path
         }
         // put pathCount somewhere
@@ -849,7 +849,7 @@ public:
         //btree.print();
     }
     
-    void buildPath(std::string path, std::vector<int> waypointIds, Waypoint w, Vector2d prevPos, double prevRot, double prevHeading, int distance, std::string storedTurn){
+    void buildPath(std::string path, std::vector<int> waypointIds, Waypoint w, Vector2d prevPos, double prevRot, double prevHeading, int distance, std::string storedTurn, double storedHeading){
         
         // TESTING
         std::cout<<"\ndistance: "<<distance<<" wp:"<<w.id<<" ";
@@ -864,6 +864,9 @@ public:
         } else {
             heading = calculateHeading(prevPos, w.pos); // (prevPos, nextPos)
         }
+        
+        // TESTING
+        std::cout<<" H:"<<setHeadingBit(heading)<<" ";
         
         // only add wp IF distance is correct
         if (distance == DISTANCE){
@@ -922,10 +925,19 @@ public:
             // it is a wp being skipped:  calculate storedTurn bit ONLY if it is "00"
             // to avoid overwriting a turn that has occurred
             if (storedTurn == "00"){
-                std::cout<<" prevH:"<<prevHeading<<" H:"<<heading<<" ";
+                //std::cout<<" prevH:"<<prevHeading<<" H:"<<heading<<" ";
                 storedTurn = determineTurnBit2(prevHeading, heading);
                 // TESTING
-                std::cout<<" storedTurn: "<<storedTurn<<" ";
+                //std::cout<<" storedTurn: "<<storedTurn<<" ";
+            }
+            
+            // store heading immediately after distance == DISTANCE
+            if (distance == DISTANCE -1){
+                // store this heading for future use
+                storedHeading = heading;
+                
+                // TESTING
+                std::cout<<" DH:"<<setHeadingBit(storedHeading)<<" ";
             }
         }
         
@@ -949,20 +961,29 @@ public:
                     if (!hasRotated){ // avoid double rotation
                         // check for 1st wp or TJunction here, and rotate bsd if needed ->
                         if ( (path.size() == BSD_PLUS_EXTRA) ){
+                            
+                            //TESTING
+                            std::cout<<"-RETRO-";
+                            
+                            double nextHeading = 0.0;
+                            if (DISTANCE == 0){
+                                nextHeading = calculateHeading(w.pos, wa.waypointArray[w.conns[i]].pos);
+                            } else {
+                                 // if skipping waypoints, use stored heading
+                                 nextHeading = storedHeading;
+                            }
+                            
                             // automatically rotates bsd for 1st bit
                             if ( (!HEADING && !TWO_BIT_TURN) ||
                                  (!HEADING && TWO_BIT_TURN) ){
                                 // delete last bsd from path (exluding turn info) and re-compute bsd orientation
                                 path = path.substr(0, path.size()-BSDLEN);
-                                double nextHeading = calculateHeading(w.pos, wa.waypointArray[w.conns[i]].pos);
                                 path = path + retroRotate(w, nextHeading); // returns w's bsd
                             } else if ( HEADING && !TWO_BIT_TURN ){
                                 // delete whole path and recompute for correct heading + bsd rotation
-                                double nextHeading = calculateHeading(w.pos, wa.waypointArray[w.conns[i]].pos);
                                 path = setHeadingBit(nextHeading);
                                 path = path + retroRotate(w, nextHeading); // returns w's bsd
                             } else if ( HEADING && TWO_BIT_TURN){
-                                double nextHeading = calculateHeading(w.pos, wa.waypointArray[w.conns[i]].pos);
                                 path = determineTurnBit2(prevHeading, heading) + setHeadingBit(nextHeading);
                                 path = path + retroRotate(w, nextHeading); // returns w's bsd
                             } else {
@@ -977,8 +998,9 @@ public:
                         }
                     }
                     
+                    
                     // path, waypointIds, w, prevPos, prevRot, prevHeading, )
-                    buildPath(path, waypointIds, wa.waypointArray[w.conns[i]], w.pos, w.rot, heading, distance, storedTurn); // recursive call to continue building path
+                    buildPath(path, waypointIds, wa.waypointArray[w.conns[i]], w.pos, w.rot, heading, distance, storedTurn, storedHeading); // recursive call to continue building path
                     hasRotated = false;
                     
                     wa.waypointArray[w.conns[i]].visited = false; // allows all connections to be attempted (1 connection may lead to multiple possible paths)
