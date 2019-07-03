@@ -26,12 +26,12 @@
 #include <set>
 
 // adding to new github
-#define BRD_LEN 3 // number of waypoints in BRD
+#define BRD_LEN 40 // number of waypoints in BRD
 #define TOTAL_WAYPOINTS 567 // total number of waypoints entered in text file (MAX expected number)
 #define MAXLINELEN 100 // maximum length of waypoint data for total waypoints < 1000 (000 00 heading x y 000 000 000....?)
 #define BSDLEN 4 // number of bits in a BSD
 // for localisation
-#define DISTANCE 1 // # of waypoints to skip
+#define DISTANCE 2 // # of waypoints to skip
 
 // DISTANCE 1
 // openings_barriers
@@ -56,14 +56,14 @@
 // test mode
 #define TEST_MODE_ACTIVE false
 #define HEADING true // + 3 bits
-#define TWO_BIT_TURN false // + 2 bits
+#define TWO_BIT_TURN true // + 2 bits
 // Change this depending on turn/heading bits (un)used
 // 0 = no turn info
 // 1 = 1 bit turn info
 // 2 = 2 bit turn info
 // heading is 3 bits: 0-N, 1-NE, 2-E, 3-SE, 4-S, 5-SW, 6-W, 7-NW where
 // N=90, E=0, S=270, W=180
-#define EXTRA_BITS 3 //number of bits added to semantic BSD from turns, heading etc
+#define EXTRA_BITS 5 //number of bits added to semantic BSD from turns, heading etc
 
 // distance stats
 #define LOWER_RANGE 1
@@ -94,6 +94,7 @@ public:
         rank = -1;
         distance = -1;
     }
+    
 };
 
 // ---------------------- //
@@ -958,7 +959,7 @@ public:
                     
                     // Retro-Active rotation for bsd's that couldn't be determined before
                     // (such as rotation of 1st waypoint, or ration at a junction)
-                    if (!hasRotated){ // avoid double rotation
+                    if (!hasRotated ){ // avoid double rotation
                         // check for 1st wp or TJunction here, and rotate bsd if needed ->
                         if ( (path.size() == BSD_PLUS_EXTRA) ){
                             
@@ -1307,6 +1308,12 @@ public:
             for(int i=0; i < allPaths.size(); i++){
                 allPaths.at(i).distance = cPath.hamming(allPaths.at(i).path, allPaths.at(i).id);
                 //std::cout<<"\nwp: "<<allPaths.at(i).id<<" - Hamming distance: "<<allPaths.at(i).distance;
+                
+                // store best match path to return
+                //if (allPaths.at(i).distance < lowestRank){
+                //    lowestRank = allPaths.at(i).distance;
+                //    bestMatch = allPaths.at(i);
+                //}
             }
             
             // rank correct id and store information in another histogram
@@ -1715,14 +1722,20 @@ int main(int argc, const char * argv[]) {
         p.printRankStats();
         // TODO Print total rank stats
         
-        
-        /*
+         
+         // TODO
+         // 1. read in route.txt and classifier.txt (this will become a loop)
+         // - build BRD
+         
+         // 2. find best wp match
         // FOR FINDING A MATCHING PATH
         // get distance from input BRD string
-        std::string testBRD = "00111110011101001111100111110011100001110000111010011101001110000111001010101001010000101000010110001010000101100010110001010000101000010110";
+        std::string testBRD = "001000110101010110101010110101000110100110110100110110100110110100110110100110110100110110100110110100110110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110";
         p.locationMatch(testBRD);
         p.printStats();
-        */
+         
+        //3. and write it to file (1st, just print to console)
+        
     
     }
     return 0;
