@@ -55,7 +55,7 @@
 #define OUTPUT "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/histogram_output/output.txt"
 // test mode
 #define TEST_MODE_ACTIVE false
-#define HEADING true // + 3 bits
+#define HEADING false // + 3 bits
 #define TWO_BIT_TURN true // + 2 bits
 // Change this depending on turn/heading bits (un)used
 // 0 = no turn info
@@ -63,7 +63,7 @@
 // 2 = 2 bit turn info
 // heading is 3 bits: 0-N, 1-NE, 2-E, 3-SE, 4-S, 5-SW, 6-W, 7-NW where
 // N=90, E=0, S=270, W=180
-#define EXTRA_BITS 5 //number of bits added to semantic BSD from turns, heading etc
+#define EXTRA_BITS 2 //number of bits added to semantic BSD from turns, heading etc
 
 // distance stats
 #define LOWER_RANGE 1
@@ -840,7 +840,7 @@ public:
             std::vector<int> waypointIds; // to track waypoint id's along path
             wa.waypointArray[i].visited = true;
             
-            buildPath(path, waypointIds, wa.waypointArray[i], wa.waypointArray[i].pos, wa.waypointArray[i].rot, wa.waypointArray[i].rot, DISTANCE); // build all paths starting at each waypoint in turn (starting 'prev rot' is just 0)
+            buildPath(path, waypointIds, wa.waypointArray[i], wa.waypointArray[i].pos, wa.waypointArray[i].rot, wa.waypointArray[i].rot, DISTANCE, "00"); // build all paths starting at each waypoint in turn (starting 'prev rot' is just 0)
             wa.unvisitAll(); // clear "visited" bool to start next path
         }
         // put pathCount somewhere
@@ -849,7 +849,7 @@ public:
         //btree.print();
     }
     
-    void buildPath(std::string path, std::vector<int> waypointIds, Waypoint w, Vector2d prevPos, double prevRot, double prevHeading, int distance){
+    void buildPath(std::string path, std::vector<int> waypointIds, Waypoint w, Vector2d prevPos, double prevRot, double prevHeading, int distance, std::string storedTurn){
         
         // TESTING
         std::cout<<"\ndistance: "<<distance<<" wp:"<<w.id<<" ";
@@ -874,14 +874,25 @@ public:
                 // 2 bits (00=no turn, 10=left, 01=right, 11=not used)
                 std::string turnBit;
                 
-                // TODO -> actually, sometimes first bits can be a turn...but okay if all meet at edges
-                if (path.size() <= BSDLEN + 2){
-                    turnBit = "00"; // no turns for first 2 waypoints, as it will always be a straight line
+                // must have turns even between 1st and 2nd waypoints when skipping wps
+                if (DISTANCE != 0){
+                    turnBit = determineTurnBit2(prevHeading, heading);
                 } else {
+                    // TODO -> actually, sometimes first bits can be a turn...but okay if all meet at edges
+                    if (path.size() <= BSDLEN + 2){
+                        turnBit = "00"; // no turns for first 2 waypoints, as it will always be a straight line
+                    } else {
                     //std::string turnBit = determineTurnBit(prevRot, w.rot);
                     turnBit = determineTurnBit2(prevHeading, heading);
+                    }
                 }
-                path = path + turnBit;
+
+                // used stored turn if it is not "00"
+                if (storedTurn != "00"){
+                    path = path + storedTurn;
+                } else {
+                    path = path + turnBit;
+                }
             }
             
             if (HEADING){
@@ -906,10 +917,18 @@ public:
             for(int i=0; i < waypointIds.size(); i++){
                 std::cout<<std::setw(BSD_PLUS_EXTRA)<<waypointIds.at(i);
             } std::cout<<std::endl;
+            
+        } else {
+            // it is a wp being skipped:  calculate storedTurn bit ONLY if it is "00"
+            // to avoid overwriting a turn that has occurred
+            if (storedTurn == "00"){
+                std::cout<<" prevH:"<<prevHeading<<" H:"<<heading<<" ";
+                storedTurn = determineTurnBit2(prevHeading, heading);
+                // TESTING
+                std::cout<<" storedTurn: "<<storedTurn<<" ";
+            }
         }
         
-        // potentially only do this if ... ?
-        // TODO incorrect distance count for connections ...
         distance = decreaseDistance(distance);
         
         // check for connections if path length not reached yet
@@ -959,7 +978,7 @@ public:
                     }
                     
                     // path, waypointIds, w, prevPos, prevRot, prevHeading, )
-                    buildPath(path, waypointIds, wa.waypointArray[w.conns[i]], w.pos, w.rot, heading, distance); // recursive call to continue building path
+                    buildPath(path, waypointIds, wa.waypointArray[w.conns[i]], w.pos, w.rot, heading, distance, storedTurn); // recursive call to continue building path
                     hasRotated = false;
                     
                     wa.waypointArray[w.conns[i]].visited = false; // allows all connections to be attempted (1 connection may lead to multiple possible paths)
@@ -1073,10 +1092,12 @@ public:
         h2 = constrain(h2);
         double diff = constrain(h2 - h1);
         
-        if (diff > 225 && diff < 315){
+        // old 225 & 315
+        if (diff > 210 && diff < 330){
             // right turn
             return "01";
-        } else if (diff > 45 && diff < 135){
+        // old 45 & 135
+        } else if (diff > 30 && diff < 150){
             // left turn
             return "10";
         }
