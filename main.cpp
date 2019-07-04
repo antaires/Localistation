@@ -26,12 +26,14 @@
 #include <set>
 
 // adding to new github
-#define BRD_LEN 40 // number of waypoints in BRD
+#define BRD_LEN 10 // number of waypoints in BRD
 #define TOTAL_WAYPOINTS 567 // total number of waypoints entered in text file (MAX expected number)
 #define MAXLINELEN 100 // maximum length of waypoint data for total waypoints < 1000 (000 00 heading x y 000 000 000....?)
 #define BSDLEN 4 // number of bits in a BSD
 // for localisation
 #define DISTANCE 2 // # of waypoints to skip
+#define PROBE_THRESHOLD 500 // TODO get accurate number
+
 
 // DISTANCE 1
 // openings_barriers
@@ -459,13 +461,17 @@ public:
 class Sensor {
 public:
     int id;
-    std::string bsd;
-    std::string h;
-    std::string t;
-    double fd;
-    double bd;
-    double ld;
-    double rd;
+    std::string bsd = "0000";
+    std::string h = "000";
+    std::string t = "00";
+    double fd = 0;
+    double bd = 0;
+    double ld = 0;
+    double rd = 0;
+    
+    void print(){
+        std::cout<<"S:"<<id<<" T:"<<t<<" H:"<<h<<" BSD:"<<bsd<<" d:"<<fd<<" "<<bd<<" "<<ld<<" "<<rd<<std::endl;
+    }
 };
 
 // ---------------------- //
@@ -477,7 +483,7 @@ public:
     std::string fileName;
     std::string line;
     std::vector<std::string> stringArray;
-    std::vector<Sensor> *route;
+    //std::vector<Sensor> *route;
     
     DataProcessing (std::string fn){
         fileName = fn;
@@ -531,7 +537,7 @@ public:
     }
     
     // for opening route.txt and classifier.txt
-    void buildRoute (std::string routeFile, std::string classifierFile) {
+    void processRoute (std::string routeFile, std::string classifierFile, std::vector<Sensor> *route) {
         std::ifstream ifsR; // open files in read mode
         std::ifstream ifsC;
         
@@ -564,9 +570,9 @@ public:
                 if (wordCount == 0){
                     s.id = stringToInt(bufR);
                 } else if (wordCount == 1){
-                    s.h = bufR;
-                } else if (wordCount == 2){
                     s.t = bufR;
+                } else if (wordCount == 2){
+                    s.h = bufR;
                 } else if (wordCount == 3){
                     s.fd = stringToDouble(bufR);
                 } else if (wordCount == 4){
@@ -584,6 +590,7 @@ public:
             route->push_back(s); // TODO confirm correct sensor id = index
             
             getline(ifsR, line);  // get next line if exists
+            
         }
         
         //  ACCESS FILE CONTENTS
@@ -602,7 +609,6 @@ public:
                 wordCount++;
                 }
             }
-            //w.print(); // TESTING prints each waypoint information
             
             getline(ifsC, line);  // get next line if exists
         }
@@ -610,7 +616,11 @@ public:
         ifsR.close(); // close the file
         ifsC.close();
         
-        // TODO return the sensor vector (perhaps pass it in as a pointer
+        // TESTING print sensors in route
+        for (int i = 0; i < route->size(); i ++){
+            route->at(i).print(); // TESTING prints each sensor information
+        }
+        
     }
     
     int stringToInt(std::string str){
@@ -625,6 +635,75 @@ public:
         double temp;
         buffer >> temp;
         return temp;
+    }
+};
+
+// ---------------------- //
+// --- Route         ---- //
+// ---------------------- //
+// contains a route id and brd
+class Route {
+public:
+    int id = 0;
+    std::string brd = "";
+    std::string matchingRoute = "";
+    // TODO
+    // might contain more than one matching route for 1st rank
+    //std::vector<std::string> matchingRoutes;
+};
+
+// ---------------------- //
+// --- Route Builder ---- //
+// ---------------------- //
+// a class to take in a vector of sensors, and out put a route # and brd
+class RouteBuilder {
+public:
+    void buildRoute(std::vector<Sensor> *routeVector, Route *route){
+        // loop over sensors in routeVector
+        for (int i = 0; i < routeVector->size(); i++){
+            // combine data in the following order: T H F B L R
+            std::string bsd = routeVector->at(i).t + routeVector->at(i).h;
+            
+            // use distance data to determine F/B wall, and if L/R are in range
+            bsd = bsd + analyseDistanceProbe(routeVector->at(i));
+            
+            // add finished string to route.brd
+            route->brd = route->brd + bsd;
+        }
+    }
+    
+    // function to determine, based on probe_threshold, if there is a wall (F/B)
+    // and whether the L/R classification was within range (else it will be 0)
+    std::string analyseDistanceProbe(Sensor s){
+        std::string bsd = "";
+        
+        // front probe
+        checkProbe(&bsd, s.bsd[0], s.fd);
+        // back probe
+        checkProbe(&bsd, s.bsd[1], s.bd);
+        // left probe
+        checkProbe(&bsd, s.bsd[2], s.ld);
+        // right probe
+        checkProbe(&bsd, s.bsd[3], s.rd);
+
+        return bsd;
+    }
+    
+    void checkProbe(std::string *bsd, char probe, double distance){
+        if (withinProbeThreshold(distance)){
+            // within range
+            *bsd = *bsd + probe;
+        } else {
+            // probe out of range
+            *bsd = *bsd + "0";
+        }
+    }
+    
+    bool withinProbeThreshold(double val){
+        if (val < PROBE_THRESHOLD){
+            return true;
+        }
+        return false;
     }
 };
 
@@ -1851,7 +1930,7 @@ int main(int argc, const char * argv[]) {
         std::cout << "paths generated" << std::endl;
         
         // number of unique paths:
-        //p.printUniqueStats();
+        p.printUniqueStats();
         
         // TESTING CORRUPTED PATHS FOR MATCHES
         //std::cout << "corrupt path testing"<< std::endl;
@@ -1875,27 +1954,30 @@ int main(int argc, const char * argv[]) {
         //p.printRankStats();
         // TODO Print total rank stats
     
-        
+        RouteBuilder routeBuilder = RouteBuilder();
          // TODO
         // open routes, and loop over folders: (0, 1, 2..., etc)
          // 1. read in route.txt and classifier.txt (this will become a loop)
             // - build BRD
-            std::vector<Sensor> route;
-            dp.route = &route;
+            std::vector<Sensor> routeVector;
+            Route route = Route();
         
             std::string routeFile = "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/routes/0/route.txt";
             std::string classifierFile = "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/routes/0/classifier.txt";
-            dp.buildRoute (routeFile, classifierFile);
-
+            dp.processRoute(routeFile, classifierFile, &routeVector);
         
             // get route i from route;
             // TODO make a class to take sensor vector, and build brd
+            routeBuilder.buildRoute(&routeVector, &route);
                 
             // 2. find best wp match
             // FOR FINDING A MATCHING PATH
-            std::string testBRD = "001000110101010110101010110101000110100110110100110110100110110100110110100110110100110110100110110100110110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110100100110";
+            std::string testBRD = "001110000001110000001110000001111011001110101001110001001110011001110000001110001001110000";
         
-            std::string matchWaypointString = p.bestMatch(testBRD);
+            // TODO - update this to handle multiple matching routes
+            std::string matchWaypointString = p.bestMatch(route.brd);
+            // can store this (TODO : make vector of multiple matches
+            route.matchingRoute = matchWaypointString;
         
             // for now, print to console
             std::cout<<"\nbest match: "<<std::endl;
@@ -1906,10 +1988,14 @@ int main(int argc, const char * argv[]) {
             //p.printStats();
          
             //3. write it to file (1st, just print to console)
-            locFile << matchWaypointString << std::endl;
+            locFile << route.id << " " << matchWaypointString << std::endl;
         
         
         locFile.close();
+        
+        // TESTING
+        std::cout<<"genr:"<<route.brd<<std::endl;
+        std::cout<<"test:"<<testBRD<<std::endl;
         
     }
     return 0;
