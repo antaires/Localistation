@@ -26,7 +26,7 @@
 #include <set>
 
 // adding to new github
-#define BRD_LEN 3 // number of waypoints in BRD
+#define BRD_LEN 10 // number of waypoints in BRD
 #define TOTAL_WAYPOINTS 567 // total number of waypoints entered in text file (MAX expected number)
 #define MAXLINELEN 100 // maximum length of waypoint data for total waypoints < 1000 (000 00 heading x y 000 000 000....?)
 #define BSDLEN 4 // number of bits in a BSD
@@ -669,6 +669,14 @@ public:
     int id = 0;
     std::string brd = "";
     std::vector<std::string> matchingRoutes;
+    
+    std::string limitBrd(int l){
+        std::string limitedBrd = brd.substr(0, l * BSD_PLUS_EXTRA);
+        
+        // TODO do I need to add 0s to end?
+        
+        return limitedBrd;
+    }
 };
 
 // ---------------------- //
@@ -997,12 +1005,26 @@ public:
         // 0 ^ 1 = 1
         // 1 ^ 1 = 0
         distance = (int)(path1 ^ path2).count();
-        //for (int i = (BRD_LEN*BSDLEN)-1; i >= 0; i--){ // not in reverse, but for binary, 0 starst on far right
-        //    if (corruptPath[i] ^ path[i]){
-        //        distance++;
-        //   }
-        //}
         return distance;
+    }
+    
+    int hammingLimit(std::bitset<(BIT_SIZE)> path1, std::bitset<(BIT_SIZE)> path2, int limit){
+        
+        // TODO use bitwise operations instead
+        std::string str1 = path1.to_string();
+        std::string str2 = path2.to_string();
+        
+        // limit to first # waypoints
+        str1 = str1.substr(0, limit * (BSD_PLUS_EXTRA));
+        str2 = str2.substr(0, limit * (BSD_PLUS_EXTRA));
+
+        // convert to bits (now all extra bits are zeros)
+        std::bitset<(BIT_SIZE)> limitedPath1(str1);
+        std::bitset<(BIT_SIZE)> limitedPath2(str2);
+
+        // find the distance
+        return hamming(limitedPath1, limitedPath2);
+
     }
 };
 
@@ -1538,8 +1560,7 @@ public:
     // ---------------------- //
     // ---- BEST MATCH   ---- //
     // ---------------------- //
-    void bestMatch(std::string testPath, std::vector<std::string> *bestMatch){
-        // TODO for now prints to console, will later output a string to write to file
+    void bestMatch(std::string testPath, std::vector<std::string> *bestMatch, int limit){
         std::bitset<BIT_SIZE> bitPath(testPath);
         Distance d = Distance();
         std::string bestMatchString = "";
@@ -1550,13 +1571,13 @@ public:
         // loop over all paths in allPaths vector
         for (int i=0; i < allPaths.size(); i++){
             // get hamming distance between testPath and all paths
-            int distance = d.hamming( allPaths.at(i).path, bitPath);
+            int distance = d.hammingLimit( allPaths.at(i).path, bitPath, limit);
             
             // if distance == lowestDistance, save route in bestMatch vector
             if (distance == lowestDistance){
                 // get string of waypoints
                 std::string str = "";
-                for(int k=0; k < allPaths.at(i).waypointIds.size(); k++){
+                for(int k=0; k < limit; k++){
                     //std::cout<<std::setw(BSD_PLUS_EXTRA)<<allPaths.at(bestMatch).waypointIds.at(i);
                     str = str + std::to_string(allPaths.at(i).waypointIds.at(k)) + " ";
                 }
@@ -1576,7 +1597,7 @@ public:
                 
                 // add current wp string to vector
                 std::string str = "";
-                for(int k=0; k < allPaths.at(i).waypointIds.size(); k++){
+                for(int k=0; k < limit; k++){
                     //std::cout<<std::setw(BSD_PLUS_EXTRA)<<allPaths.at(bestMatch).waypointIds.at(i);
                     str = str + std::to_string(allPaths.at(i).waypointIds.at(k)) + " ";
                 }
@@ -2021,31 +2042,40 @@ int main(int argc, const char * argv[]) {
             // TODO make a class to take sensor vector, and build brd
             routeBuilder.buildRoute(&routeVector, &route);
             
-            // 2. find best wp match
+            
+            
             // FOR FINDING A MATCHING PATH
-            // TODO - update this to handle multiple matching routes
-            std::vector<std::string> bestMatch;
-            p.bestMatch(route.brd, &bestMatch);
-            
-            // can store this (TODO : make vector of multiple matches
-            route.matchingRoutes = bestMatch;
-            // testing
-            std::cout<<"\nroute:"<<route.id<<" bestMatch size:"<<bestMatch.size()<<std::endl;
-            
-            // print this to get rank info:
-            //p.locationMatch(testBRD);
-            //p.printStats();
-            
-            //3. write it to file
-            for (int j = 0; j < bestMatch.size(); j++){
-                locFile << route.id << " " << bestMatch.at(j) << std::endl;
+            // 2. find best wp match
+            // loop over brd, limit size to 5, 10, 15...50
+            for (int k = 5; k <= BRD_LEN; k+=5){
                 
-                // TESTING
-                std::cout << route.id << " " << bestMatch.at(j) <<std::endl;
+                // write num of waypoints to file
+                locFile << "\nWP:" << k << std::endl;
+
+                
+                std::vector<std::string> bestMatch;
+                //p.bestMatch(route.limitBrd(k), &bestMatch, k); if i limit hamming, dont need to limit brd?
+                p.bestMatch(route.brd, &bestMatch, k);
+                
+                // can store this (TODO : make vector of multiple matches
+                route.matchingRoutes = bestMatch;
+                // testing
+                std::cout<<"\nroute:"<<route.id<<" bestMatch size:"<<bestMatch.size()<<std::endl;
+                
+                // print this to get rank info:
+                //p.locationMatch(testBRD);
+                //p.printStats();
+                
+                //3. write it to file
+                // TODO -- 1 big file or many smaller files, for each route?
+                for (int j = 0; j < bestMatch.size(); j++){
+                    locFile << route.id << " " << bestMatch.at(j) << std::endl;
+                    // TESTING
+                    std::cout << route.id << " " << bestMatch.at(j) <<std::endl;
+                }
+                
+                
             }
-            
-            // TESTING
-            //std::cout<<"genr:"<<route.brd<<std::endl;
         }
         
         locFile.close();
