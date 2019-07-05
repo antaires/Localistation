@@ -26,7 +26,7 @@
 #include <set>
 
 // adding to new github
-#define BRD_LEN 10 // number of waypoints in BRD
+#define BRD_LEN 3 // number of waypoints in BRD
 #define TOTAL_WAYPOINTS 567 // total number of waypoints entered in text file (MAX expected number)
 #define MAXLINELEN 100 // maximum length of waypoint data for total waypoints < 1000 (000 00 heading x y 000 000 000....?)
 #define BSDLEN 4 // number of bits in a BSD
@@ -34,7 +34,6 @@
 #define DISTANCE 2 // # of waypoints to skip
 #define PROBE_THRESHOLD 500 // TODO get accurate number
 #define TOTAL_ROUTES 5
-
 
 // DISTANCE 1
 // openings_barriers
@@ -573,7 +572,7 @@ public:
                 } else if (wordCount == 1){
                     s.t = bufR;
                 } else if (wordCount == 2){
-                    s.h = bufR;
+                    s.h = translateCompass(stringToDouble(bufR));
                 } else if (wordCount == 3){
                     s.fd = stringToDouble(bufR);
                 } else if (wordCount == 4){
@@ -618,10 +617,32 @@ public:
         ifsC.close();
         
         // TESTING print sensors in route
-        for (int i = 0; i < route->size(); i ++){
-            route->at(i).print(); // TESTING prints each sensor information
-        }
+        //for (int i = 0; i < route->size(); i ++){
+        //    route->at(i).print(); // TESTING prints each sensor information
+        //}
         
+    }
+    
+    std::string translateCompass(double degree){
+        std::string heading;
+        if (degree > 22 && degree <= 67){ // NE 001
+            heading = "001";
+        } else if (degree > 67 && degree <= 112){ // E 010
+            heading = "010";
+        } else if (degree > 112 && degree <= 157){ // SE 011
+            heading = "011";
+        } else if (degree > 157 && degree <= 202){ // S 100
+            heading = "100";
+        } else if (degree > 202 && degree <= 247){ // SW 101
+            heading = "101";
+        } else if (degree > 247 && degree <= 292){ // W 110
+            heading = "110";
+        } else if (degree > 292 && degree <= 337){ // NW 111
+            heading = "111";
+        } else { // N 000
+            heading = "000";
+        }
+        return heading;
     }
     
     int stringToInt(std::string str){
@@ -647,10 +668,7 @@ class Route {
 public:
     int id = 0;
     std::string brd = "";
-    std::string matchingRoute = "";
-    // TODO
-    // might contain more than one matching route for 1st rank
-    //std::vector<std::string> matchingRoutes;
+    std::vector<std::string> matchingRoutes;
 };
 
 // ---------------------- //
@@ -1520,42 +1538,73 @@ public:
     // ---------------------- //
     // ---- BEST MATCH   ---- //
     // ---------------------- //
-    std::string bestMatch(std::string testPath){
+    void bestMatch(std::string testPath, std::vector<std::string> *bestMatch){
         // TODO for now prints to console, will later output a string to write to file
         std::bitset<BIT_SIZE> bitPath(testPath);
         Distance d = Distance();
         std::string bestMatchString = "";
         
         int lowestDistance = BIT_SIZE; // highest possible distance to start
-        int bestMatch = 0; // index of best path
+        int bestMatchIndex = 0; // index of best path
         
         // loop over all paths in allPaths vector
         for (int i=0; i < allPaths.size(); i++){
             // get hamming distance between testPath and all paths
             int distance = d.hamming( allPaths.at(i).path, bitPath);
+            
+            // if distance == lowestDistance, save route in bestMatch vector
+            if (distance == lowestDistance){
+                // get string of waypoints
+                std::string str = "";
+                for(int k=0; k < allPaths.at(i).waypointIds.size(); k++){
+                    //std::cout<<std::setw(BSD_PLUS_EXTRA)<<allPaths.at(bestMatch).waypointIds.at(i);
+                    str = str + std::to_string(allPaths.at(i).waypointIds.at(k)) + " ";
+                }
+                bestMatch->push_back(str);
+                
+                // TESTING
+                std::cout<<"\nadding route: "<<str;
+            }
+            
             //save lowest distance
             if (distance < lowestDistance){
                 lowestDistance = distance;
-                bestMatch = i;
+                bestMatchIndex = i;
+                
+                // clear vector
+                bestMatch->clear();
+                
+                // add current wp string to vector
+                std::string str = "";
+                for(int k=0; k < allPaths.at(i).waypointIds.size(); k++){
+                    //std::cout<<std::setw(BSD_PLUS_EXTRA)<<allPaths.at(bestMatch).waypointIds.at(i);
+                    str = str + std::to_string(allPaths.at(i).waypointIds.at(k)) + " ";
+                }
+                bestMatch->push_back(str);
             }
-            // if distance is 0 (it wont ever be but just in case) stop process
-            if (lowestDistance == 0){
-                i = (int) allPaths.size();
-            }
+            
+            // if distance is 0 (it wont ever be but just in case) stop process - no, now need all distances
+            //if (lowestDistance == 0){
+            //    i = (int) allPaths.size();
+            //}
         }
         
         //return wp sequence for best match
         //std::cout<<allPaths.at(bestMatch).path;
-        for(int i=0; i < allPaths.at(bestMatch).waypointIds.size(); i++){
+        //for(int i=0; i < allPaths.at(bestMatchIndex).waypointIds.size(); i++){
             //std::cout<<std::setw(BSD_PLUS_EXTRA)<<allPaths.at(bestMatch).waypointIds.at(i);
-            bestMatchString = bestMatchString + std::to_string(allPaths.at(bestMatch).waypointIds.at(i)) + " ";
-        } //std::cout<<std::endl;
-        
-        //std::bitset<(BIT_SIZE)> path;
-        //std::vector<int> waypointIds;
-        
-        return bestMatchString;
+        //    bestMatchString = bestMatchString + std::to_string(allPaths.at(bestMatchIndex).waypointIds.at(i)) + " ";
+        //} //std::cout<<std::endl;
+
     }
+    
+    /* TODO remove repetition
+    std::string vectorToString(std::vector<std::string> vec){
+        std::string str = "";
+        for (int i = 0; i < vec.size(); i++){
+            str = str + std::to_string(vec.at(i)) + " ";
+        }
+    }*/
     
     
     // ---------------------- //
@@ -1974,26 +2023,29 @@ int main(int argc, const char * argv[]) {
             
             // 2. find best wp match
             // FOR FINDING A MATCHING PATH
-            //std::string testBRD = "001110000001110000001110000001111011001110101001110001001110011001110000001110001001110000";
-            
             // TODO - update this to handle multiple matching routes
-            std::string matchWaypointString = p.bestMatch(route.brd);
-            // can store this (TODO : make vector of multiple matches
-            route.matchingRoute = matchWaypointString;
+            std::vector<std::string> bestMatch;
+            p.bestMatch(route.brd, &bestMatch);
             
-            // for now, print to console
-            std::cout<<"\nbest match: "<<std::endl;
-            std::cout<<matchWaypointString<<std::endl;
+            // can store this (TODO : make vector of multiple matches
+            route.matchingRoutes = bestMatch;
+            // testing
+            std::cout<<"\nroute:"<<route.id<<" bestMatch size:"<<bestMatch.size()<<std::endl;
             
             // print this to get rank info:
             //p.locationMatch(testBRD);
             //p.printStats();
             
-            //3. write it to file (1st, just print to console)
-            locFile << route.id << " " << matchWaypointString << std::endl;
+            //3. write it to file
+            for (int j = 0; j < bestMatch.size(); j++){
+                locFile << route.id << " " << bestMatch.at(j) << std::endl;
+                
+                // TESTING
+                std::cout << route.id << " " << bestMatch.at(j) <<std::endl;
+            }
             
             // TESTING
-            std::cout<<"genr:"<<route.brd<<std::endl;
+            //std::cout<<"genr:"<<route.brd<<std::endl;
         }
         
         locFile.close();
