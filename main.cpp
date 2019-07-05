@@ -33,6 +33,7 @@
 // for localisation
 #define DISTANCE 2 // # of waypoints to skip
 #define PROBE_THRESHOLD 500 // TODO get accurate number
+#define TOTAL_ROUTES 5
 
 
 // DISTANCE 1
@@ -1955,47 +1956,47 @@ int main(int argc, const char * argv[]) {
         // TODO Print total rank stats
     
         RouteBuilder routeBuilder = RouteBuilder();
-         // TODO
-        // open routes, and loop over folders: (0, 1, 2..., etc)
-         // 1. read in route.txt and classifier.txt (this will become a loop)
+        std::string routeFilePath = "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/routes/";
+         // 1. read in route.txt and classifier.txt
+        for (int i = 0; i < TOTAL_ROUTES; i++){
             // - build BRD
             std::vector<Sensor> routeVector;
             Route route = Route();
-        
-            std::string routeFile = "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/routes/0/route.txt";
-            std::string classifierFile = "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/routes/0/classifier.txt";
+            route.id = i;
+            
+            std::string routeFile = routeFilePath + std::to_string(i) + "/route.txt";
+            std::string classifierFile = routeFilePath + std::to_string(i) + "/classifier.txt";
             dp.processRoute(routeFile, classifierFile, &routeVector);
-        
+            
             // get route i from route;
             // TODO make a class to take sensor vector, and build brd
             routeBuilder.buildRoute(&routeVector, &route);
-                
+            
             // 2. find best wp match
             // FOR FINDING A MATCHING PATH
-            std::string testBRD = "001110000001110000001110000001111011001110101001110001001110011001110000001110001001110000";
-        
+            //std::string testBRD = "001110000001110000001110000001111011001110101001110001001110011001110000001110001001110000";
+            
             // TODO - update this to handle multiple matching routes
             std::string matchWaypointString = p.bestMatch(route.brd);
             // can store this (TODO : make vector of multiple matches
             route.matchingRoute = matchWaypointString;
-        
+            
             // for now, print to console
             std::cout<<"\nbest match: "<<std::endl;
             std::cout<<matchWaypointString<<std::endl;
-        
+            
             // print this to get rank info:
             //p.locationMatch(testBRD);
             //p.printStats();
-         
+            
             //3. write it to file (1st, just print to console)
             locFile << route.id << " " << matchWaypointString << std::endl;
-        
+            
+            // TESTING
+            std::cout<<"genr:"<<route.brd<<std::endl;
+        }
         
         locFile.close();
-        
-        // TESTING
-        std::cout<<"genr:"<<route.brd<<std::endl;
-        std::cout<<"test:"<<testBRD<<std::endl;
         
     }
     return 0;
