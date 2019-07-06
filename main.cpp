@@ -2042,16 +2042,13 @@ int main(int argc, const char * argv[]) {
             // TODO make a class to take sensor vector, and build brd
             routeBuilder.buildRoute(&routeVector, &route);
             
-            
+            // write route id to file
+            //locFile << "# "<< route.id << std::endl;
             
             // FOR FINDING A MATCHING PATH
             // 2. find best wp match
             // loop over brd, limit size to 5, 10, 15...50
             for (int k = 5; k <= BRD_LEN; k+=5){
-                
-                // write num of waypoints to file
-                locFile << "\nWP:" << k << std::endl;
-
                 
                 std::vector<std::string> bestMatch;
                 //p.bestMatch(route.limitBrd(k), &bestMatch, k); if i limit hamming, dont need to limit brd?
@@ -2059,8 +2056,9 @@ int main(int argc, const char * argv[]) {
                 
                 // can store this (TODO : make vector of multiple matches
                 route.matchingRoutes = bestMatch;
+                
                 // testing
-                std::cout<<"\nroute:"<<route.id<<" bestMatch size:"<<bestMatch.size()<<std::endl;
+                //std::cout<<"\nroute:"<<route.id<<" bestMatch size:"<<bestMatch.size()<<std::endl;
                 
                 // print this to get rank info:
                 //p.locationMatch(testBRD);
@@ -2069,9 +2067,9 @@ int main(int argc, const char * argv[]) {
                 //3. write it to file
                 // TODO -- 1 big file or many smaller files, for each route?
                 for (int j = 0; j < bestMatch.size(); j++){
-                    locFile << route.id << " " << bestMatch.at(j) << std::endl;
+                    locFile << route.id << " " << k << " " << bestMatch.at(j) << std::endl;
                     // TESTING
-                    std::cout << route.id << " " << bestMatch.at(j) <<std::endl;
+                    std::cout << route.id << " " << k << " " << bestMatch.at(j) <<std::endl;
                 }
                 
                 
