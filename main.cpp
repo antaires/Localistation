@@ -26,14 +26,14 @@
 #include <set>
 
 // adding to new github
-#define BRD_LEN 10 // number of waypoints in BRD
+#define BRD_LEN 15 // number of waypoints in BRD
 #define TOTAL_WAYPOINTS 567 // total number of waypoints entered in text file (MAX expected number)
 #define MAXLINELEN 100 // maximum length of waypoint data for total waypoints < 1000 (000 00 heading x y 000 000 000....?)
 #define BSDLEN 4 // number of bits in a BSD
 // for localisation
-#define DISTANCE 2 // # of waypoints to skip
-#define PROBE_THRESHOLD 500 // TODO get accurate number
-#define TOTAL_ROUTES 5
+#define DISTANCE 1 // # of waypoints to skip
+#define PROBE_THRESHOLD 8.3988
+#define TOTAL_ROUTES 1 // # of routes I'm testing
 
 // DISTANCE 1
 // openings_barriers
@@ -57,7 +57,7 @@
 #define OUTPUT "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/histogram_output/output.txt"
 // test mode
 #define TEST_MODE_ACTIVE false
-#define HEADING true // + 3 bits
+#define HEADING false // + 3 bits
 #define TWO_BIT_TURN true // + 2 bits
 // Change this depending on turn/heading bits (un)used
 // 0 = no turn info
@@ -65,7 +65,7 @@
 // 2 = 2 bit turn info
 // heading is 3 bits: 0-N, 1-NE, 2-E, 3-SE, 4-S, 5-SW, 6-W, 7-NW where
 // N=90, E=0, S=270, W=180
-#define EXTRA_BITS 5 //number of bits added to semantic BSD from turns, heading etc
+#define EXTRA_BITS 2 //number of bits added to semantic BSD from turns, heading etc
 
 // distance stats
 #define LOWER_RANGE 1
@@ -689,13 +689,22 @@ public:
         // loop over sensors in routeVector
         for (int i = 0; i < routeVector->size(); i++){
             // combine data in the following order: T H F B L R
-            std::string bsd = routeVector->at(i).t + routeVector->at(i).h;
+            std::string bsd = "";
+            if (TWO_BIT_TURN){
+                bsd = routeVector->at(i).t;
+            }
+            if (HEADING){
+                 bsd = bsd + routeVector->at(i).h;
+            }
             
             // use distance data to determine F/B wall, and if L/R are in range
             bsd = bsd + analyseDistanceProbe(routeVector->at(i));
             
             // add finished string to route.brd
             route->brd = route->brd + bsd;
+            
+            // TESTING
+            std::cout<<"\nroute:"<<routeVector->at(i).id<<" "<<route->brd;
         }
     }
     
@@ -705,23 +714,31 @@ public:
         std::string bsd = "";
         
         // front probe
-        checkProbe(&bsd, s.bsd[0], s.fd);
+        checkProbe(&bsd, s.bsd[0], s.fd, true);
         // back probe
-        checkProbe(&bsd, s.bsd[1], s.bd);
+        checkProbe(&bsd, s.bsd[1], s.bd, true);
+        
         // left probe
-        checkProbe(&bsd, s.bsd[2], s.ld);
+        checkProbe(&bsd, s.bsd[2], s.ld, false);
         // right probe
-        checkProbe(&bsd, s.bsd[3], s.rd);
+        checkProbe(&bsd, s.bsd[3], s.rd, false);
 
         return bsd;
     }
     
-    void checkProbe(std::string *bsd, char probe, double distance){
+    void checkProbe(std::string *bsd, char probe, double distance, bool isFrontBack){
         if (withinProbeThreshold(distance)){
-            // within range
-            *bsd = *bsd + probe;
+            
+            if (isFrontBack){
+                // uses only distance value, not image
+                *bsd = *bsd + "1";
+            } else {
+                // within range (Left / right --> use classified image
+                *bsd = *bsd + probe;
+            }
+            
         } else {
-            // probe out of range
+            // probe out of range, add 0
             *bsd = *bsd + "0";
         }
     }
@@ -2048,7 +2065,7 @@ int main(int argc, const char * argv[]) {
             // FOR FINDING A MATCHING PATH
             // 2. find best wp match
             // loop over brd, limit size to 5, 10, 15...50
-            for (int k = 5; k <= BRD_LEN; k+=5){
+            for (int k = 1; k <= BRD_LEN; k+=1){
                 
                 std::vector<std::string> bestMatch;
                 //p.bestMatch(route.limitBrd(k), &bestMatch, k); if i limit hamming, dont need to limit brd?
