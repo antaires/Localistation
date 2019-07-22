@@ -26,18 +26,25 @@
 #include <set>
 
 // adding to new github
-#define BRD_LEN 15 // number of waypoints in BRD
+#define BRD_LEN 50 // number of waypoints in BRD
 #define TOTAL_WAYPOINTS 567 // total number of waypoints entered in text file (MAX expected number)
 #define MAXLINELEN 100 // maximum length of waypoint data for total waypoints < 1000 (000 00 heading x y 000 000 000....?)
 #define BSDLEN 4 // number of bits in a BSD
 // for localisation
 #define DISTANCE 1 // # of waypoints to skip
 #define PROBE_THRESHOLD 8.3988
-#define TOTAL_ROUTES 1 // # of routes I'm testing
+#define TOTAL_ROUTES 3008 // # of routes I'm testing
 
-// DISTANCE 1
+// FOR PRINTING DATA
+#define PRINT_BRD false
+#define PRINT_WAYPOINT_SEQUENCE true
+
+// DISTANCE 1 THIS IS THE DATA I HAVE USED FOR DATA COLLECTION
 // openings_barriers
-#define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/data/undirected/openings_barriers/distance1/data_distance1_567_FBLR.txt"
+#define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/data/intrinsics/openings_barriers/distance1/data_distance1_567_FBLR.txt"
+
+// collectedData TO GENERATE BRD from REAL DATA
+//#define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/DataCollection/BuildDataBrd/fullCollectedData.txt"
 
 // DISTANCE 2
 // DOORS
@@ -68,9 +75,9 @@
 #define EXTRA_BITS 2 //number of bits added to semantic BSD from turns, heading etc
 
 // distance stats
-#define LOWER_RANGE 1
-#define UPPER_RANGE 10
-#define RANK_STATS_SIZE 11
+#define LOWER_RANGE 5
+#define UPPER_RANGE 35
+#define RANK_STATS_SIZE 21
 
 // don't change
 #define BSD_PLUS_EXTRA BSDLEN+EXTRA_BITS
@@ -97,7 +104,6 @@ public:
         rank = -1;
         distance = -1;
     }
-    
 };
 
 // ---------------------- //
@@ -669,13 +675,35 @@ public:
     int id = 0;
     std::string brd = "";
     std::vector<std::string> matchingRoutes;
+    std::vector<int> match;
+    
+    std::vector<int> getMatch (int index) {
+        // convert matchingRoutes string to vector of its
+        if (index > matchingRoutes.size()){
+            std::cout<<"Route: error - input index for getMatch() is out of range"<<std::endl;
+        }
+        
+        match.clear();
+        
+        // loop over words in string for matchingRoutes at index, and convert to int
+        std::istringstream s(matchingRoutes.at(index));
+        std::string word;
+        while (s >> word){
+            match.push_back(stringToInt(word));
+        }
+        return match;
+    }
     
     std::string limitBrd(int l){
         std::string limitedBrd = brd.substr(0, l * BSD_PLUS_EXTRA);
-        
-        // TODO do I need to add 0s to end?
-        
         return limitedBrd;
+    }
+    
+    int stringToInt(std::string str){
+        std::stringstream stream(str);
+        int x = 0;
+        stream >> x;
+        return x;
     }
 };
 
@@ -1269,12 +1297,18 @@ public:
             allPaths.push_back(newPath);
             
             // TESTING
-            std::cout<<"\nPATH ADDED:";
-            std::cout<<"\n"<<brd;
-            std::cout<<"\ncount: "<<pathCount<<std::endl;
-            for(int i=0; i < waypointIds.size(); i++){
-                std::cout<<std::setw(BSD_PLUS_EXTRA)<<waypointIds.at(i);
-            } std::cout<<std::endl;
+            // CHANGE HERE -> to gather different types of output
+            //std::cout<<"\nPATH ADDED:";
+            std::cout<<pathCount<<" "; // using as routeId (starts at 1)
+            if (PRINT_BRD){
+                std::cout<<brd<<" ";
+            } else if (PRINT_WAYPOINT_SEQUENCE){
+                 for(int i=0; i < waypointIds.size(); i++){
+                 //std::cout<<std::setw(BSD_PLUS_EXTRA)<<waypointIds.at(i);
+                 std::cout<<waypointIds.at(i)<<" ";
+                 }
+            }
+            std::cout<<std::endl;
             
             if (TEST_MODE_ACTIVE){
                 testData5(path, waypointIds);
@@ -1468,6 +1502,34 @@ public:
         }
     }
     
+    // target path will be corrupted and distance tested
+    void distanceAllPathsTarget(std::string targetPath, int endWPid, int corruptionAmount){
+        // set all used values to 0
+        reset();
+        
+        // loop over tree, and calculate distance between corruptPath and all other paths
+        std::vector<SinglePath> allPaths = btree.getAllPaths();
+        
+        // build path from Target
+        std::bitset<(BIT_SIZE)> targetBitPath(targetPath);
+        
+        if (!allPaths.empty()){
+            corruptPath(targetBitPath, endWPid);
+            
+            for(int i=0; i < allPaths.size(); i++){
+                cPath.hamming(allPaths.at(i).path, allPaths.at(i).id);
+            }
+            
+            // rank correct id and store information in another histogram
+            cPath.setRank();
+            int r = cPath.getRank();
+            if (r > RANK_STATS_SIZE -1 ){
+                r = RANK_STATS_SIZE -1;
+            }
+            rankHist[r] = rankHist[r] + 1;
+        }
+    }
+    
     void distanceElimination(){
         // set all used values to 0
         reset();
@@ -1601,7 +1663,7 @@ public:
                 bestMatch->push_back(str);
                 
                 // TESTING
-                std::cout<<"\nadding route: "<<str;
+                // std::cout<<"\nadding route: "<<str;
             }
             
             //save lowest distance
@@ -2030,7 +2092,9 @@ int main(int argc, const char * argv[]) {
         
         // TODO LOOP OVER THIS X TIMES
         //for(int i=0; i < 1000; i++){
-        //    p.distanceAllPaths();
+            
+            // FOR RANDOM PATH
+            //p.distanceAllPaths();
             //p.printStats();
             
             // elimination - start with max wp length and generate paths
@@ -2039,9 +2103,19 @@ int main(int argc, const char * argv[]) {
             //p.distanceElimination();
         //}
         
-        //p.printRankStats();
+        // FOR CORRUPTION RANK OF SPECIFIC PATH
+        // p.distanceAllPathsTarget("000100000000000000000000000011000011001001001010000100000101000001100101100001100000100001100001100000100001100001100001100001100000101001100101100001100001100011100010100001100001", 304, -1);
+        // p.printStats();
+        
+        // p.printRankStats();
         // TODO Print total rank stats
-    
+
+        
+        
+        /*
+        // *-------------------------------------------------*
+        // *     USE FOR BUILDING ROUTES FROM SENSOR FOLDERS *
+        // *-------------------------------------------------*
         RouteBuilder routeBuilder = RouteBuilder();
         std::string routeFilePath = "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/routes/";
          // 1. read in route.txt and classifier.txt
@@ -2086,13 +2160,103 @@ int main(int argc, const char * argv[]) {
                 for (int j = 0; j < bestMatch.size(); j++){
                     locFile << route.id << " " << k << " " << bestMatch.at(j) << std::endl;
                     // TESTING
-                    std::cout << route.id << " " << k << " " << bestMatch.at(j) <<std::endl;
+                    //std::cout << route.id << " " << k << " " << bestMatch.at(j) <<std::endl;
                 }
-                
-                
             }
         }
+        locFile.close();
+         */
         
+        // *----------------------------------------------------------*
+        // *     USE FOR BUILDING ROUTES FROM allRoutes_collected.txt *
+        // *  this is for building many routes from real 567 wp data  *
+        // *----------------------------------------------------------*
+        std::string routeFilePath = "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/routes/allRoutes_collected.txt";
+        std::vector<Route> routeVector;
+        Route dummy = Route();
+        // fill route vector
+        for(int i = 0; i <= TOTAL_ROUTES+1; i++){
+            Route r = Route();
+            routeVector.push_back(r);
+        }
+        
+        // loop over every line in file, and build all collected route from it
+        std::string line; std::string buf; std::string brd; int id = 0;
+        std::ifstream ifs;
+        ifs.open(routeFilePath);
+        // safety check
+        if (!ifs){
+            std::cout << "ERROR: cannot open classifier file";
+            exit(1);
+        }
+        //  ACCESS FILE CONTENTS
+        getline(ifs, line);
+        while (ifs) { // loop through file line by line
+            int wordCount = 0;
+            // ACCESS WORDS IN STRING
+            buf = "";
+            std::stringstream ss(line);
+            
+            while(ss >> buf){
+                if (wordCount == 0){
+                    id = dummy.stringToInt(buf);
+                } else if (wordCount == 1){
+                    brd = buf;
+                }
+                wordCount++;
+            }
+            // add data to route on routeVector
+            //std::cout<<"\nid: "<<id;
+            routeVector.at(id).brd = brd;
+            routeVector.at(id).id = id;
+            
+            getline(ifs, line);
+        }
+        
+        // 1. loop over all collected routes
+        for (int i = 1; i < TOTAL_ROUTES; i++){
+
+            /*
+            // FOR FINDING A MATCHING PATH at length 50 waypoints
+            std::vector<std::string> bestMatch;
+            p.bestMatch(routeVector.at(i).brd, &bestMatch, BRD_LEN);
+            routeVector.at(i).matchingRoutes = bestMatch;
+            // write it to file
+            for (int j = 0; j < bestMatch.size(); j++){
+                locFile << routeVector.at(i).id << " " << bestMatch.at(j) << std::endl;
+                
+                // TESTING
+                //std::cout << routeVector.at(i).id << " " << bestMatch.at(j) <<std::endl;
+            }
+            */
+            
+            
+            // FOR FINDING A MATCHING PATH at every brd length (1-50)
+            for (int k = 5; k <= BRD_LEN; k+=5){
+                std::vector<std::string> bestMatch;
+                //p.bestMatch(route.limitBrd(k), &bestMatch, k); if i limit hamming, dont need to limit brd?
+                p.bestMatch(routeVector.at(i).brd, &bestMatch, k);
+                
+                // can store this (TODO : make vector of multiple matches
+                routeVector.at(i).matchingRoutes = bestMatch;
+                
+                // testing
+                //std::cout<<"\nroute:"<<route.id<<" bestMatch size:"<<bestMatch.size()<<std::endl;
+                
+                // print this to get rank info:
+                //p.locationMatch(testBRD);
+                //p.printStats();
+                
+                //3. write it to file
+                // TODO -- 1 big file or many smaller files, for each route?
+                for (int j = 0; j < bestMatch.size(); j++){
+                    locFile << routeVector.at(i).id << " " << k << " " << bestMatch.at(j) << std::endl;
+                    // TESTING
+                    //std::cout << route.id << " " << k << " " << bestMatch.at(j) <<std::endl;
+                }
+            }
+            
+        }
         locFile.close();
         
     }
