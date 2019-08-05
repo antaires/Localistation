@@ -29,22 +29,24 @@
 #define BRD_LEN 50 // number of waypoints in BRD
 #define TOTAL_WAYPOINTS 567 // total number of waypoints entered in text file (MAX expected number)
 #define MAXLINELEN 100 // maximum length of waypoint data for total waypoints < 1000 (000 00 heading x y 000 000 000....?)
-#define BSDLEN 4 // number of bits in a BSD
+#define BSDLEN 6  // number of bits in a BSD
 // for localisation
 #define DISTANCE 1 // # of waypoints to skip
-#define PROBE_THRESHOLD 8.3988
+#define PROBE_THRESHOLD 6.5
 #define TOTAL_ROUTES 3008 // # of routes I'm testing
 
 // FOR PRINTING DATA
 #define PRINT_BRD false
 #define PRINT_WAYPOINT_SEQUENCE true
 
-// DISTANCE 1 THIS IS THE DATA I HAVE USED FOR DATA COLLECTION
+// DISTANCE 1 THIS IS THE DATA I HAVE USED FOR DATA COLLECTION - FROM UNITY - generate groundTruth wp sequences
 // openings_barriers
-#define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/data/intrinsics/openings_barriers/distance1/data_distance1_567_FBLR.txt"
+//#define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/data/intrinsics/openings_barriers/distance1/data_distance1_567_FBLR.txt"
+#define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/data/unityOutput/lineOfSight/doorWindowNeither/6.5/unityData.txt"
 
 // collectedData TO GENERATE BRD from REAL DATA
 //#define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/DataCollection/BuildDataBrd/fullCollectedData.txt"
+//#define DATAFILE "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/data/collectedOutput/doorWindowNeither/6.5/fullData.txt"
 
 // DISTANCE 2
 // DOORS
@@ -87,6 +89,10 @@
 #define DIRECTED false
 #define STATS_ARR_LEN 102
 #define ARRLEN TOTAL_WAYPOINTS + 1 // length of waypoint arr (total num of waypoints + 1) - each waypoint stored as its id
+
+// Collected data file : BRD (first generate this by inputing the collected data as DATAFILE
+bool allRanksOn = true;
+std::string routeFilePath = "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/output/lineOfSight/doorWindowNeither/6.5/brds.txt";
 
 // ---------------------- //
 // --- SINGLE PATH ------ //
@@ -2171,7 +2177,8 @@ int main(int argc, const char * argv[]) {
         // *     USE FOR BUILDING ROUTES FROM allRoutes_collected.txt *
         // *  this is for building many routes from real 567 wp data  *
         // *----------------------------------------------------------*
-        std::string routeFilePath = "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/routes/allRoutes_collected.txt";
+        // collected data file MOVED TO TOP OF PROGRAM
+        //std::string routeFilePath = "/Users/valiaodonnell/Documents/School/Bristol/masterProject/histogram/histogram/routes/allRoutes_collected.txt";
         std::vector<Route> routeVector;
         Route dummy = Route();
         // fill route vector
@@ -2214,7 +2221,7 @@ int main(int argc, const char * argv[]) {
         }
         
         // 1. loop over all collected routes
-        for (int i = 1; i < TOTAL_ROUTES; i++){
+        for (int i = 1; i <= TOTAL_ROUTES; i++){
 
             /*
             // FOR FINDING A MATCHING PATH at length 50 waypoints
@@ -2248,7 +2255,6 @@ int main(int argc, const char * argv[]) {
                 //p.printStats();
                 
                 //3. write it to file
-                // TODO -- 1 big file or many smaller files, for each route?
                 for (int j = 0; j < bestMatch.size(); j++){
                     locFile << routeVector.at(i).id << " " << k << " " << bestMatch.at(j) << std::endl;
                     // TESTING
